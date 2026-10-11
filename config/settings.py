@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-24*zfz-ta^=$@u2zck^#pvd%)ntr(q-5jeqn8m*ide#=06$3k='
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-ALLOWED_HOSTS = ['checka.pythonanywhere.com']
+ALLOWED_HOSTS = ['checka.pythonanywhere.com', 'localhost', '127.0.0.1']
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
