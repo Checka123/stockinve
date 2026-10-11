@@ -693,6 +693,160 @@ def stock_count_session_reopen_area(request, pk, audit_pk):
     return redirect('stock:stock_count_session_detail', pk=pk)
 
 
+def _area_column_title(audit):
+    return audit.location_area or (audit.category.name if audit.category_id else audit.title) or 'Área'
+
+
+def _count_number_format(decimal_separator):
+    """Fuerza el carácter decimal aunque el Excel del usuario use otra región."""
+    if decimal_separator == ',':
+        return '0","00'
+    return '0"."00'
+
+
+def build_session_count_workbook(session, audits, decimal_separator='.'):
+    """Arma el Excel del conteo: una fila por producto y una columna por área."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    items = StockAuditItem.objects.filter(audit__in=audits).select_related('product')
+    products = {}
+    for item in items:
+        entry = products.setdefault(item.product_id, {'product': item.product, 'counts': {}})
+        entry['counts'][item.audit_id] = item.counted_stock
+    ordered = sorted(
+        products.values(),
+        key=lambda entry: (entry['product'].sequence_number, entry['product'].name.lower()),
+    )
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Conteo'
+
+    fixed_headers = ['Orden', 'Grupo', 'Código', 'Nombre del producto', 'Presentación']
+    area_headers = [_area_column_title(audit) for audit in audits]
+    headers = fixed_headers + area_headers + ['Total existencias']
+    last_col = len(headers)
+    first_area_col = len(fixed_headers) + 1
+    last_area_col = first_area_col + len(area_headers) - 1
+    total_col = last_col
+
+    title_font = Font(name='Calibri', bold=True, size=18, color='1F2933')
+    header_font = Font(name='Calibri', bold=True, size=11, color='FFFFFF')
+    header_fill = PatternFill('solid', fgColor='0F7B6C')
+    title_fill = PatternFill('solid', fgColor='F4FBF8')
+    thin = Border(
+        left=Side(style='thin', color='D9E2DF'),
+        right=Side(style='thin', color='D9E2DF'),
+        top=Side(style='thin', color='D9E2DF'),
+        bottom=Side(style='thin', color='D9E2DF'),
+    )
+    center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    left_align = Alignment(horizontal='left', vertical='center')
+    count_format = _count_number_format(decimal_separator)
+
+    sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(fixed_headers))
+    sheet['A1'] = session.title
+    sheet['A1'].font = title_font
+    sheet['A1'].alignment = Alignment(horizontal='left', vertical='center')
+    sheet['A1'].fill = title_fill
+
+    if area_headers:
+        sheet.merge_cells(start_row=1, start_column=first_area_col, end_row=1, end_column=total_col)
+        period_cell = sheet.cell(1, first_area_col, session.count_date.strftime('%d/%m/%Y'))
+        period_cell.font = title_font
+        period_cell.alignment = Alignment(horizontal='center', vertical='center')
+        period_cell.fill = title_fill
+    for col in range(1, last_col + 1):
+        sheet.cell(1, col).fill = title_fill
+        sheet.cell(1, col).border = thin
+
+    for col, header in enumerate(headers, start=1):
+        cell = sheet.cell(2, col, header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+        cell.border = thin
+
+    for row_index, entry in enumerate(ordered, start=3):
+        product = entry['product']
+        values = [
+            product.sequence_number,
+            product.group or '',
+            product.sku or '',
+            product.name,
+            product.presentation or '',
+        ]
+        for col, value in enumerate(values, start=1):
+            cell = sheet.cell(row_index, col, value)
+            cell.border = thin
+            cell.alignment = center if col == 1 else left_align
+            if col == 1:
+                cell.font = Font(name='Calibri', bold=True)
+
+        for offset, audit in enumerate(audits):
+            counted = entry['counts'].get(audit.id)
+            col = first_area_col + offset
+            cell = sheet.cell(row_index, col, Decimal('0.00') if counted is None else counted)
+            cell.border = thin
+            cell.alignment = center
+            cell.number_format = count_format
+
+        start_letter = get_column_letter(first_area_col)
+        end_letter = get_column_letter(last_area_col)
+        total_cell = sheet.cell(
+            row_index,
+            total_col,
+            f'=SUM({start_letter}{row_index}:{end_letter}{row_index})',
+        )
+        total_cell.border = thin
+        total_cell.alignment = center
+        total_cell.font = Font(name='Calibri', bold=True)
+        total_cell.number_format = count_format
+
+    widths = [12, 18, 16, 36, 22] + [16] * len(area_headers) + [20]
+    for col, width in enumerate(widths, start=1):
+        sheet.column_dimensions[get_column_letter(col)].width = width
+    sheet.row_dimensions[1].height = 28
+    sheet.row_dimensions[2].height = 22
+    sheet.freeze_panes = 'A3'
+    sheet.auto_filter.ref = f'A2:{get_column_letter(last_col)}{max(2, 2 + len(ordered))}'
+    return workbook
+
+
+@login_required
+def stock_count_session_export_excel(request, pk):
+    """Descarga el conteo de las áreas elegidas, una columna por área."""
+    session = get_object_or_404(StockCountSession, pk=pk)
+    if request.method != 'POST':
+        return redirect('stock:stock_count_session_detail', pk=pk)
+
+    raw_ids = request.POST.getlist('areas')
+    ids = []
+    for raw_id in raw_ids:
+        try:
+            ids.append(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+    audits = list(
+        session.audits.filter(id__in=ids).select_related('category').order_by('category__name', 'id')
+    )
+    if not audits:
+        messages.warning(request, 'Selecciona al menos un área para generar el Excel.')
+        return redirect('stock:stock_count_session_detail', pk=pk)
+
+    decimal_separator = ',' if request.POST.get('decimal_separator') == ',' else '.'
+    workbook = build_session_count_workbook(session, audits, decimal_separator)
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    slug = ''.join(ch if ch.isalnum() else '_' for ch in session.title).strip('_') or f'conteo_{session.pk}'
+    response['Content-Disposition'] = f'attachment; filename="{slug}.xlsx"'
+    workbook.save(response)
+    return response
+
+
 @login_required
 def stock_count_session_finalize(request, pk):
     """Finaliza la sesión: consolida las áreas y aplica el stock al inventario."""

@@ -24,6 +24,7 @@ urlpatterns = [
     path('conteos/<int:pk>/areas/<int:audit_pk>/quitar/', views.stock_count_session_remove_area, name='stock_count_session_remove_area'),
     path('conteos/<int:pk>/areas/<int:audit_pk>/reabrir/', views.stock_count_session_reopen_area, name='stock_count_session_reopen_area'),
     path('conteos/<int:pk>/finalizar/', views.stock_count_session_finalize, name='stock_count_session_finalize'),
+    path('conteos/<int:pk>/excel/', views.stock_count_session_export_excel, name='stock_count_session_export_excel'),
 
     # Tomas de Inventario a la Fecha
     path('inventarios/', views.stock_audit_list, name='stock_audit_list'),

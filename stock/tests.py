@@ -606,3 +606,86 @@ class RestaurantInventoryTests(TestCase):
         self.assertEqual(pending.suggested_order, Decimal('15.00'))
         self.assertEqual(already.counted_stock, Decimal('4.00'))
         self.assertEqual(already.final_order, Decimal('2.00'))
+
+    def test_session_excel_puts_each_area_in_its_own_column(self):
+        from io import BytesIO
+        from openpyxl import load_workbook
+
+        bodega = Category.objects.create(name='Bodega')
+        cocina = Category.objects.create(name='Cocina')
+        self.product1.group = 'ABARROTE'
+        self.product1.presentation = 'bolsa'
+        self.product1.save(update_fields=['group', 'presentation'])
+
+        session = StockCountSession.objects.create(
+            title='SUSHI MON', count_date=timezone.now().date(),
+        )
+        audit_bodega = StockAudit.objects.create(
+            session=session, category=bodega, location_area='Bodega',
+            title='SUSHI MON - Bodega', audit_date=session.count_date,
+        )
+        audit_cocina = StockAudit.objects.create(
+            session=session, category=cocina, location_area='Cocina',
+            title='SUSHI MON - Cocina', audit_date=session.count_date,
+        )
+        StockAuditItem.objects.create(
+            audit=audit_bodega, product=self.product2, counted_stock=Decimal('1.00'),
+        )
+        StockAuditItem.objects.create(
+            audit=audit_bodega, product=self.product1, counted_stock=None,
+        )
+        StockAuditItem.objects.create(
+            audit=audit_cocina, product=self.product1, counted_stock=Decimal('0.50'),
+        )
+
+        detail = self.client.get(reverse('stock:stock_count_session_detail', kwargs={'pk': session.pk}))
+        self.assertContains(detail, 'Descargar Excel')
+        self.assertContains(detail, 'Bodega')
+        self.assertContains(detail, 'Cocina')
+
+        response = self.client.post(
+            reverse('stock:stock_count_session_export_excel', kwargs={'pk': session.pk}),
+            {'areas': [audit_cocina.pk, audit_bodega.pk]},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('spreadsheetml', response['Content-Type'])
+
+        sheet = load_workbook(BytesIO(response.content)).active
+        self.assertEqual(sheet['A1'].value, 'SUSHI MON')
+        headers = [cell.value for cell in sheet[2]]
+        self.assertEqual(headers, [
+            'Orden', 'Grupo', 'Código', 'Nombre del producto', 'Presentación',
+            'Bodega', 'Cocina', 'Total existencias',
+        ])
+        self.assertEqual([sheet.cell(3, col).value for col in range(1, 6)], [
+            10, 'ABARROTE', 'RES-01', 'Filete de Res', 'bolsa',
+        ])
+        self.assertEqual(sheet.cell(3, 6).value, Decimal('0.00'))
+        self.assertEqual(sheet.cell(3, 6).number_format, '0"."00')
+        self.assertEqual(sheet.cell(3, 7).value, Decimal('0.50'))
+        self.assertEqual(sheet.cell(3, 8).value, '=SUM(F3:G3)')
+        self.assertEqual(sheet.cell(4, 4).value, 'Pechuga de Pollo')
+        self.assertEqual(sheet.cell(4, 6).value, Decimal('1.00'))
+        self.assertEqual(sheet.cell(4, 7).value, Decimal('0.00'))
+
+        only_cocina = self.client.post(
+            reverse('stock:stock_count_session_export_excel', kwargs={'pk': session.pk}),
+            {'areas': [audit_cocina.pk]},
+        )
+        cocina_headers = [cell.value for cell in load_workbook(BytesIO(only_cocina.content)).active[2]]
+        self.assertIn('Cocina', cocina_headers)
+        self.assertNotIn('Bodega', cocina_headers)
+
+        missing = self.client.post(
+            reverse('stock:stock_count_session_export_excel', kwargs={'pk': session.pk}),
+            {},
+        )
+        self.assertEqual(missing.status_code, 302)
+
+        comma_file = self.client.post(
+            reverse('stock:stock_count_session_export_excel', kwargs={'pk': session.pk}),
+            {'areas': [audit_cocina.pk], 'decimal_separator': ','},
+        )
+        comma_sheet = load_workbook(BytesIO(comma_file.content)).active
+        self.assertEqual(comma_sheet.cell(3, 6).number_format, '0","00')
+        self.assertEqual(comma_sheet.cell(3, 6).value, Decimal('0.50'))

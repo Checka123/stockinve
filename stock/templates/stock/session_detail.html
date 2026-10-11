@@ -88,6 +88,57 @@
     </div>
     {% endif %}
 
+    {% if areas %}
+    <form method="POST" action="{% url 'stock:stock_count_session_export_excel' session.pk %}" id="exportExcelForm" class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+        {% csrf_token %}
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div>
+                <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600"></i>
+                    Excel del conteo
+                </h2>
+                <p class="text-xs text-slate-500 mt-1">Elige las áreas. El archivo trae los productos por secuencia y una columna con el conteo de cada área.</p>
+            </div>
+            <button type="button" id="openExportModal" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition inline-flex items-center justify-center gap-1.5">
+                <i data-lucide="download" class="w-4 h-4"></i> Descargar Excel
+            </button>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer">
+                <input type="checkbox" id="exportAllAreas" checked class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-200">
+                Todas
+            </label>
+            {% for area in areas %}
+            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer">
+                <input type="checkbox" name="areas" value="{{ area.pk }}" checked class="export-area rounded border-slate-300 text-emerald-600 focus:ring-emerald-200">
+                {{ area.location_area|default:area.category.name|default:"General" }}
+            </label>
+            {% endfor %}
+        </div>
+
+        <div id="exportDecimalModal" class="fixed inset-0 bg-slate-950/40 z-50 hidden items-center justify-center p-4">
+            <div class="bg-white rounded-lg max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200">
+                <h3 class="text-base font-semibold text-slate-900">Separador de decimales</h3>
+                <p class="text-sm text-slate-600">Elige el que usa tu Excel. Así las cantidades se ven bien y las sumas siguen funcionando.</p>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-200 cursor-pointer">
+                        <input type="radio" name="decimal_separator" value="." checked class="text-emerald-600 focus:ring-emerald-200">
+                        <span class="text-sm text-slate-800">Punto <strong class="font-semibold">0.50</strong></span>
+                    </label>
+                    <label class="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-200 cursor-pointer">
+                        <input type="radio" name="decimal_separator" value="," class="text-emerald-600 focus:ring-emerald-200">
+                        <span class="text-sm text-slate-800">Coma <strong class="font-semibold">0,50</strong></span>
+                    </label>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <button type="button" id="closeExportModal" class="flex-1 py-2.5 rounded-md border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-100 transition">Cancelar</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition">Descargar</button>
+                </div>
+            </div>
+        </div>
+    </form>
+    {% endif %}
+
     <!-- Areas List -->
     <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div class="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -210,4 +261,49 @@
     {% endif %}
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const exportAll = document.getElementById('exportAllAreas');
+    const exportAreas = Array.from(document.querySelectorAll('.export-area'));
+    function syncExportAll() {
+        if (!exportAll) return;
+        exportAll.checked = exportAreas.length > 0 && exportAreas.every(box => box.checked);
+    }
+    if (exportAll) {
+        exportAll.addEventListener('change', function() {
+            exportAreas.forEach(box => { box.checked = exportAll.checked; });
+        });
+    }
+    exportAreas.forEach(box => box.addEventListener('change', syncExportAll));
+    const exportForm = document.getElementById('exportExcelForm');
+    const exportModal = document.getElementById('exportDecimalModal');
+    function openExportModal() {
+        if (!exportAreas.some(box => box.checked)) {
+            window.alert('Selecciona al menos un área para generar el Excel.');
+            return;
+        }
+        exportModal.classList.remove('hidden');
+        exportModal.classList.add('flex');
+    }
+    function closeExportModal() {
+        exportModal.classList.add('hidden');
+        exportModal.classList.remove('flex');
+    }
+    document.getElementById('openExportModal')?.addEventListener('click', openExportModal);
+    document.getElementById('closeExportModal')?.addEventListener('click', closeExportModal);
+    exportModal?.addEventListener('click', function(event) {
+        if (event.target === exportModal) closeExportModal();
+    });
+    if (exportForm) {
+        exportForm.addEventListener('submit', function(event) {
+            if (!exportAreas.some(box => box.checked)) {
+                event.preventDefault();
+                closeExportModal();
+                window.alert('Selecciona al menos un área para generar el Excel.');
+            }
+        });
+    }
+</script>
 {% endblock %}
