@@ -697,13 +697,16 @@ def _area_column_title(audit):
     return audit.location_area or (audit.category.name if audit.category_id else audit.title) or 'Área'
 
 
-def _count_number_format(decimal_separator):
-    """Dos decimales de verdad. El punto del formato es el decimal, no un símbolo fijo.
+def _count_display_format(value, decimal_separator):
+    """Muestra 5.00 o 5,00 sin mover el número que usa la suma.
 
-    Excel lo muestra como 3.00 o 3,00 según su propia configuración. Poner la coma
-    dentro del formato hacía que 3 se viera como 0,3.
+    El separador va entre comillas para que Excel lo pinte tal cual. Si la coma
+    queda suelta en el formato, Excel la toma como miles y un 5 se ve como 0,5.
     """
-    return '0.00'
+    text = f'{Decimal(value).quantize(Decimal("0.01")):.2f}'
+    if decimal_separator == ',':
+        text = text.replace('.', ',')
+    return f'"{text}"'
 
 
 def build_session_count_workbook(session, audits, decimal_separator='.'):
@@ -715,8 +718,12 @@ def build_session_count_workbook(session, audits, decimal_separator='.'):
     items = StockAuditItem.objects.filter(audit__in=audits).select_related('product')
     products = {}
     for item in items:
-        entry = products.setdefault(item.product_id, {'product': item.product, 'counts': {}})
+        entry = products.setdefault(
+            item.product_id,
+            {'product': item.product, 'counts': {}, 'orders': {}},
+        )
         entry['counts'][item.audit_id] = item.counted_stock
+        entry['orders'][item.audit_id] = item.final_order or Decimal('0.00')
     ordered = sorted(
         products.values(),
         key=lambda entry: (entry['product'].sequence_number, entry['product'].name.lower()),
@@ -728,11 +735,12 @@ def build_session_count_workbook(session, audits, decimal_separator='.'):
 
     fixed_headers = ['Orden', 'Grupo', 'Código', 'Nombre del producto', 'Presentación']
     area_headers = [_area_column_title(audit) for audit in audits]
-    headers = fixed_headers + area_headers + ['Total existencias']
+    headers = fixed_headers + area_headers + ['Total existencias', 'Pedido']
     last_col = len(headers)
     first_area_col = len(fixed_headers) + 1
     last_area_col = first_area_col + len(area_headers) - 1
-    total_col = last_col
+    total_col = last_col - 1
+    order_col = last_col
 
     title_font = Font(name='Calibri', bold=True, size=18, color='1F2933')
     header_font = Font(name='Calibri', bold=True, size=11, color='FFFFFF')
@@ -746,7 +754,6 @@ def build_session_count_workbook(session, audits, decimal_separator='.'):
     )
     center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     left_align = Alignment(horizontal='left', vertical='center')
-    count_format = _count_number_format(decimal_separator)
 
     sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(fixed_headers))
     sheet['A1'] = session.title
@@ -755,7 +762,7 @@ def build_session_count_workbook(session, audits, decimal_separator='.'):
     sheet['A1'].fill = title_fill
 
     if area_headers:
-        sheet.merge_cells(start_row=1, start_column=first_area_col, end_row=1, end_column=total_col)
+        sheet.merge_cells(start_row=1, start_column=first_area_col, end_row=1, end_column=last_col)
         period_cell = sheet.cell(1, first_area_col, session.count_date.strftime('%d/%m/%Y'))
         period_cell.font = title_font
         period_cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -787,13 +794,16 @@ def build_session_count_workbook(session, audits, decimal_separator='.'):
             if col == 1:
                 cell.font = Font(name='Calibri', bold=True)
 
+        row_total = Decimal('0.00')
         for offset, audit in enumerate(audits):
             counted = entry['counts'].get(audit.id)
+            amount = Decimal('0.00') if counted is None else counted
+            row_total += amount
             col = first_area_col + offset
-            cell = sheet.cell(row_index, col, Decimal('0.00') if counted is None else counted)
+            cell = sheet.cell(row_index, col, amount)
             cell.border = thin
             cell.alignment = center
-            cell.number_format = count_format
+            cell.number_format = _count_display_format(amount, decimal_separator)
 
         start_letter = get_column_letter(first_area_col)
         end_letter = get_column_letter(last_area_col)
@@ -805,9 +815,19 @@ def build_session_count_workbook(session, audits, decimal_separator='.'):
         total_cell.border = thin
         total_cell.alignment = center
         total_cell.font = Font(name='Calibri', bold=True)
-        total_cell.number_format = count_format
+        total_cell.number_format = _count_display_format(row_total, decimal_separator)
 
-    widths = [12, 18, 16, 36, 22] + [16] * len(area_headers) + [20]
+        order_total = sum(
+            (entry['orders'].get(audit.id, Decimal('0.00')) for audit in audits),
+            Decimal('0.00'),
+        )
+        order_cell = sheet.cell(row_index, order_col, order_total if order_total > 0 else None)
+        order_cell.border = thin
+        order_cell.alignment = center
+        if order_total > 0:
+            order_cell.number_format = _count_display_format(order_total, decimal_separator)
+
+    widths = [12, 18, 16, 36, 22] + [16] * len(area_headers) + [20, 16]
     for col, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(col)].width = width
     sheet.row_dimensions[1].height = 28

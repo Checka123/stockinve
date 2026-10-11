@@ -633,9 +633,11 @@ class RestaurantInventoryTests(TestCase):
         )
         StockAuditItem.objects.create(
             audit=audit_bodega, product=self.product1, counted_stock=None,
+            final_order=Decimal('0.75'),
         )
         StockAuditItem.objects.create(
             audit=audit_cocina, product=self.product1, counted_stock=Decimal('0.50'),
+            final_order=Decimal('1.25'),
         )
 
         detail = self.client.get(reverse('stock:stock_count_session_detail', kwargs={'pk': session.pk}))
@@ -655,26 +657,34 @@ class RestaurantInventoryTests(TestCase):
         headers = [cell.value for cell in sheet[2]]
         self.assertEqual(headers, [
             'Orden', 'Grupo', 'Código', 'Nombre del producto', 'Presentación',
-            'Bodega', 'Cocina', 'Total existencias',
+            'Bodega', 'Cocina', 'Total existencias', 'Pedido',
         ])
         self.assertEqual([sheet.cell(3, col).value for col in range(1, 6)], [
             10, 'ABARROTE', 'RES-01', 'Filete de Res', 'bolsa',
         ])
         self.assertEqual(sheet.cell(3, 6).value, Decimal('0.00'))
-        self.assertEqual(sheet.cell(3, 6).number_format, '0.00')
+        self.assertEqual(sheet.cell(3, 6).number_format, '"0.00"')
+        self.assertEqual(sheet.cell(3, 7).number_format, '"0.50"')
+        self.assertEqual(sheet.cell(3, 8).number_format, '"0.50"')
         self.assertEqual(sheet.cell(3, 7).value, Decimal('0.50'))
         self.assertEqual(sheet.cell(3, 8).value, '=SUM(F3:G3)')
+        self.assertEqual(sheet.cell(3, 9).value, Decimal('2.00'))
+        self.assertEqual(sheet.cell(3, 9).number_format, '"2.00"')
         self.assertEqual(sheet.cell(4, 4).value, 'Pechuga de Pollo')
         self.assertEqual(sheet.cell(4, 6).value, Decimal('1.00'))
         self.assertEqual(sheet.cell(4, 7).value, Decimal('0.00'))
+        self.assertIsNone(sheet.cell(4, 9).value)
 
         only_cocina = self.client.post(
             reverse('stock:stock_count_session_export_excel', kwargs={'pk': session.pk}),
             {'areas': [audit_cocina.pk]},
         )
-        cocina_headers = [cell.value for cell in load_workbook(BytesIO(only_cocina.content)).active[2]]
+        cocina_sheet = load_workbook(BytesIO(only_cocina.content)).active
+        cocina_headers = [cell.value for cell in cocina_sheet[2]]
         self.assertIn('Cocina', cocina_headers)
         self.assertNotIn('Bodega', cocina_headers)
+        self.assertEqual(cocina_headers[-1], 'Pedido')
+        self.assertEqual(cocina_sheet.cell(3, 8).value, Decimal('1.25'))
 
         missing = self.client.post(
             reverse('stock:stock_count_session_export_excel', kwargs={'pk': session.pk}),
@@ -687,5 +697,5 @@ class RestaurantInventoryTests(TestCase):
             {'areas': [audit_cocina.pk], 'decimal_separator': ','},
         )
         comma_sheet = load_workbook(BytesIO(comma_file.content)).active
-        self.assertEqual(comma_sheet.cell(3, 6).number_format, '0.00')
+        self.assertEqual(comma_sheet.cell(3, 6).number_format, '"0,50"')
         self.assertEqual(comma_sheet.cell(3, 6).value, Decimal('0.50'))
