@@ -661,7 +661,7 @@ class RestaurantInventoryTests(TestCase):
             10, 'ABARROTE', 'RES-01', 'Filete de Res', 'bolsa',
         ])
         self.assertEqual(sheet.cell(3, 6).value, Decimal('0.00'))
-        self.assertEqual(sheet.cell(3, 6).number_format, '0"."00')
+        self.assertEqual(sheet.cell(3, 6).number_format, '0.00')
         self.assertEqual(sheet.cell(3, 7).value, Decimal('0.50'))
         self.assertEqual(sheet.cell(3, 8).value, '=SUM(F3:G3)')
         self.assertEqual(sheet.cell(4, 4).value, 'Pechuga de Pollo')
@@ -687,5 +687,5 @@ class RestaurantInventoryTests(TestCase):
             {'areas': [audit_cocina.pk], 'decimal_separator': ','},
         )
         comma_sheet = load_workbook(BytesIO(comma_file.content)).active
-        self.assertEqual(comma_sheet.cell(3, 6).number_format, '0","00')
+        self.assertEqual(comma_sheet.cell(3, 6).number_format, '0.00')
         self.assertEqual(comma_sheet.cell(3, 6).value, Decimal('0.50'))

@@ -698,10 +698,12 @@ def _area_column_title(audit):
 
 
 def _count_number_format(decimal_separator):
-    """Fuerza el carácter decimal aunque el Excel del usuario use otra región."""
-    if decimal_separator == ',':
-        return '0","00'
-    return '0"."00'
+    """Dos decimales de verdad. El punto del formato es el decimal, no un símbolo fijo.
+
+    Excel lo muestra como 3.00 o 3,00 según su propia configuración. Poner la coma
+    dentro del formato hacía que 3 se viera como 0,3.
+    """
+    return '0.00'
 
 
 def build_session_count_workbook(session, audits, decimal_separator='.'):
