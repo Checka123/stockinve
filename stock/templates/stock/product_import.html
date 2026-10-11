@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} | Inventario Restaurante{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+    <nav class="flex items-center gap-2 text-xs text-slate-500">
+        <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+        <span>/</span>
+        <a href="{% url 'stock:product_list' %}" class="hover:text-slate-900">Productos</a>
+        <span>/</span>
+        <span class="text-slate-800 font-semibold">{{ title }}</span>
+    </nav>
+
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-black text-slate-900">{{ title }}</h1>
+                <p class="text-xs text-slate-500 mt-0.5">Carga tu catálogo de insumos desde un archivo Excel.</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-5">
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 space-y-2">
+                <p class="font-bold text-slate-800">Columnas reconocidas (primera fila = encabezados):</p>
+                <ul class="list-disc pl-4 space-y-0.5">
+                    <li><span class="font-mono font-semibold">sequence_number</span> — Secuencia / ordinal (opcional)</li>
+                    <li><span class="font-mono font-semibold">sku</span> — Código/SKU (opcional)</li>
+                    <li><span class="font-mono font-semibold">group</span> — Grupo del insumo</li>
+                    <li><span class="font-mono font-semibold">name</span> — Nombre del producto (obligatorio)</li>
+                    <li><span class="font-mono font-semibold">presentation</span> — Presentación (ej. Bolsa 500g)</li>
+                    <li><span class="font-mono font-semibold">location</span> — Área(s) / ubicación(es). Puedes separar varias con coma</li>
+                </ul>
+                <p class="text-slate-400">Los productos se identifican por nombre. Las áreas que no existan se crean automáticamente y la unidad por defecto es <span class="font-mono font-semibold">unidad</span>.</p>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Archivo Excel (.xlsx) <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="file" name="file" accept=".xlsx"
+                           class="form-input w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500" required>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                    <a href="{% url 'stock:product_list' %}" class="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition">
+                        Cancelar
+                    </a>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition flex items-center gap-2">
+                        <i data-lucide="upload" class="w-4 h-4"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

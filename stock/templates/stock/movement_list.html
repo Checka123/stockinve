@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Bitácora de Movimientos (Kardex) | Inventario Restaurante{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <i data-lucide="history" class="w-7 h-7 text-emerald-600"></i>
+                Bitácora de Movimientos de Stock (Kardex)
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">
+                Auditoría completa de todas las entradas de compras, ajustes manuales, mermas de cocina y tomas de inventario.
+            </p>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {% if movements %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm text-slate-600">
+                <thead class="bg-slate-50 uppercase text-[11px] font-bold text-slate-500 border-b border-slate-200">
+                    <tr>
+                        <th class="px-5 py-3">Fecha y Hora</th>
+                        <th class="px-4 py-3">Insumo / Producto</th>
+                        <th class="px-4 py-3">Tipo de Operación</th>
+                        <th class="px-4 py-3 text-right">Stock Anterior</th>
+                        <th class="px-4 py-3 text-right">Variación</th>
+                        <th class="px-4 py-3 text-right">Nuevo Stock</th>
+                        <th class="px-4 py-3">Referencia / Motivo</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for mov in movements %}
+                    <tr class="hover:bg-slate-50/70 transition">
+                        <td class="px-5 py-3 text-slate-500 font-mono text-xs">
+                            {{ mov.created_at|date:"d/m/Y H:i" }}
+                        </td>
+                        <td class="px-4 py-3 font-bold text-slate-900">
+                            <a href="{% url 'stock:product_detail' mov.product.pk %}" class="hover:text-emerald-600 hover:underline">
+                                {{ mov.product.name }}
+                            </a>
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if mov.movement_type == 'audit' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                                📋 Toma de Inventario
+                            </span>
+                            {% elif mov.movement_type == 'waste' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
+                                🗑️ Merma / Caducidad
+                            </span>
+                            {% elif mov.movement_type == 'entry' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                📥 Entrada / Compra
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                                ⚙️ Ajuste Manual
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-600">
+                            {{ mov.previous_stock }} {{ mov.product.get_unit_display }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-black {% if mov.quantity > 0 %}text-emerald-600{% elif mov.quantity < 0 %}text-rose-600{% else %}text-slate-400{% endif %}">
+                            {% if mov.quantity > 0 %}+{% endif %}{{ mov.quantity }} {{ mov.product.get_unit_display }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-extrabold text-slate-900">
+                            {{ mov.new_stock }} {{ mov.product.get_unit_display }}
+                        </td>
+                        <td class="px-4 py-3 text-xs text-slate-500">
+                            {{ mov.reference|default:"-" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-400">
+            <i data-lucide="history" class="w-12 h-12 mx-auto text-slate-300 mb-2"></i>
+            <h3 class="text-base font-bold text-slate-700">No hay movimientos registrados</h3>
+            <p class="text-xs mt-1">Los movimientos aparecerán automáticamente al realizar tomas de inventario, recibir pedidos o registrar mermas.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

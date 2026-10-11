@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión | StockGourmet Restaurante</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full flex items-center justify-center p-4 font-sans text-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950">
+
+    <div class="max-w-md w-full space-y-8 bg-slate-900/90 border border-slate-800 p-8 rounded-3xl shadow-2xl backdrop-blur-xl">
+        <!-- Logo & Header -->
+        <div class="text-center">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white mx-auto shadow-lg shadow-emerald-500/30 mb-4">
+                <i data-lucide="utensils" class="w-8 h-8"></i>
+            </div>
+            <h1 class="text-2xl font-black tracking-tight text-white">StockGourmet</h1>
+            <p class="text-xs text-emerald-400 font-semibold tracking-wider uppercase mt-1">Control de Inventario & Pedidos para Restaurante</p>
+            <p class="text-slate-400 text-xs mt-2">Inicia sesión con tu cuenta de chef, encargado o administrador.</p>
+        </div>
+
+        {% if form.errors %}
+        <div class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+            <i data-lucide="alert-octagon" class="w-4 h-4 flex-shrink-0"></i>
+            <span>Usuario o contraseña incorrectos. Por favor intenta de nuevo.</span>
+        </div>
+        {% endif %}
+
+        <!-- Login Form -->
+        <form method="POST" class="space-y-4">
+            {% csrf_token %}
+
+            <div>
+                <label for="id_username" class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Nombre de Usuario
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                        <i data-lucide="user" class="w-4 h-4"></i>
+                    </div>
+                    <input type="text" 
+                           name="username" 
+                           id="id_username" 
+                           autofocus 
+                           required 
+                           placeholder="ej. chef_mario / admin" 
+                           class="w-full pl-9 pr-3 py-2.5 bg-slate-800/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl text-sm text-white placeholder-slate-500 transition">
+                </div>
+            </div>
+
+            <div>
+                <label for="id_password" class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Contraseña
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                        <i data-lucide="lock" class="w-4 h-4"></i>
+                    </div>
+                    <input type="password" 
+                           name="password" 
+                           id="id_password" 
+                           required 
+                           placeholder="••••••••" 
+                           class="w-full pl-9 pr-3 py-2.5 bg-slate-800/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl text-sm text-white placeholder-slate-500 transition">
+                </div>
+            </div>
+
+            <button type="submit" class="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/25 transition transform active:scale-95 flex items-center justify-center gap-2 mt-6">
+                <i data-lucide="log-in" class="w-4 h-4 text-slate-950"></i> Ingresar al Sistema
+            </button>
+        </form>
+
+        <div class="pt-4 border-t border-slate-800 text-center text-xs text-slate-500">
+            <span>Usuario demo predeterminado: <strong class="text-slate-300">admin</strong> / Contraseña: <strong class="text-slate-300">admin123</strong></span>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

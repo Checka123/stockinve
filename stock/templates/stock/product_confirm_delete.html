@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Confirmar Eliminación | {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-12 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 text-center space-y-4">
+    <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+        <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+    </div>
+    
+    <div>
+        <h2 class="text-lg font-bold text-slate-900">¿Archivar / Eliminar Producto?</h2>
+        <p class="text-xs text-slate-500 mt-1">
+            Estás a punto de desactivar <span class="font-bold text-slate-800">"{{ product.name }}"</span>. No aparecerá en los conteos activos de inventario.
+        </p>
+    </div>
+
+    <form method="POST" class="pt-4 flex items-center justify-center gap-3">
+        {% csrf_token %}
+        <a href="{% url 'stock:product_list' %}" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition">
+            Cancelar
+        </a>
+        <button type="submit" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition">
+            Sí, Desactivar Producto
+        </button>
+    </form>
+</div>
+{% endblock %}

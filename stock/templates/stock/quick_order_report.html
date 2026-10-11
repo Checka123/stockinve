@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Reporte Rápido de Pedidos Express | Inventario Restaurante{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+
+    <!-- Header & Actions -->
+    <div class="no-print bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+            <nav class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Pedido Express por Stock Mínimo</span>
+            </nav>
+            <h1 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="zap" class="w-5 h-5 text-amber-500"></i>
+                Pedido Express por Mínimos de Seguridad
+            </h1>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button onclick="window.print()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition inline-flex items-center gap-1.5 shadow-sm">
+                <i data-lucide="printer" class="w-4 h-4 text-emerald-400"></i> Imprimir / PDF
+            </button>
+            <a href="{% url 'stock:stock_audit_create' %}" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition inline-flex items-center gap-1.5 shadow-md shadow-emerald-700/20">
+                <i data-lucide="clipboard-check" class="w-4 h-4"></i> Hacer Conteo Completo
+            </a>
+        </div>
+    </div>
+
+    <!-- Sheet -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 sm:p-8 space-y-6">
+        
+        <div class="border-b border-slate-200 pb-5 flex flex-col sm:flex-row items-start justify-between gap-4">
+            <div>
+                <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">SOLICITUD DE REPOSICIÓN INMEDIATA</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Calculado automáticamente con base en los insumos que están por debajo de su cantidad mínima configurada.</p>
+                <p class="text-xs text-slate-700 mt-2 font-semibold">Fecha: {{ today|date:"d/m/Y" }}</p>
+            </div>
+            <div class="sm:text-right bg-amber-50 sm:bg-transparent p-3 sm:p-0 rounded-xl">
+                <span class="text-xs text-slate-400 uppercase font-semibold block">Insumos en Alerta</span>
+                <span class="text-2xl font-black text-amber-600">{{ low_products|length }} artículos</span>
+            </div>
+        </div>
+
+        {% if low_products %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm text-slate-700">
+                <thead class="bg-slate-50 uppercase text-[11px] font-bold text-slate-500 border-b border-slate-200">
+                    <tr>
+                        <th class="px-4 py-3">Insumo</th>
+                        <th class="px-3 py-3">Proveedor</th>
+                        <th class="px-3 py-3 text-right">Stock Actual</th>
+                        <th class="px-3 py-3 text-right">Cantidad Mínima</th>
+                        <th class="px-4 py-3 text-right bg-emerald-50 text-emerald-900 font-black">Sugerido a Pedir</th>
+                        <th class="px-3 py-3 text-right">Costo Estimado</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for p in low_products %}
+                    <tr class="hover:bg-slate-50/50">
+                        <td class="px-4 py-3.5 font-bold text-slate-900">
+                            {{ p.name }}
+                            {% if p.locations_display != "Sin ubicación" %}
+                            <span class="text-[10px] text-slate-400 block font-normal">{{ p.locations_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-3 py-3.5 text-xs text-slate-600">
+                            {{ p.supplier.name|default:"Sin asignar" }}
+                        </td>
+                        <td class="px-3 py-3.5 text-right font-extrabold {% if p.is_out_of_stock %}text-rose-600{% else %}text-amber-600{% endif %}">
+                            {{ p.current_stock }} {{ p.get_unit_display }}
+                        </td>
+                        <td class="px-3 py-3.5 text-right font-semibold text-slate-700">
+                            {{ p.min_stock }} {{ p.get_unit_display }}
+                        </td>
+                        <td class="px-4 py-3.5 text-right font-black text-emerald-700 bg-emerald-50/30 text-base">
+                            +{{ p.suggested_reorder_qty }} <span class="text-xs font-normal text-emerald-900">{{ p.get_unit_display }}</span>
+                        </td>
+                        <td class="px-3 py-3.5 text-right font-mono font-medium text-slate-800">
+                            Q{{ p.cost_price|default_if_none:"0.00"|floatformat:"2u" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-400">
+            <i data-lucide="check-circle" class="w-12 h-12 mx-auto text-emerald-500 mb-2"></i>
+            <h3 class="text-base font-bold text-slate-700">Todo el inventario está en niveles óptimos</h3>
+            <p class="text-xs mt-1">Ningún insumo se encuentra actualmente por debajo de su cantidad mínima.</p>
+        </div>
+        {% endif %}
+
+    </div>
+
+</div>
+{% endblock %}

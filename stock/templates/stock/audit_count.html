@@ -1,0 +1,677 @@
+{% extends "base.html" %}
+{% load l10n %}
+
+{% block title %}Conteo: {{ audit.title }} | Inventario Restaurante{% endblock %}
+
+{% block extra_head %}
+<style>
+    .sticky-audit-bar {
+        position: sticky;
+        bottom: 0;
+        z-index: 40;
+    }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    input[type=number] { -moz-appearance: textfield; }
+
+    .count-label {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1rem;
+        color: #5f5e5b;
+    }
+    .field-head .count-label { margin-bottom: 0; }
+    .field-head { margin-bottom: 0.35rem; }
+    .count-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+    .count-readonly,
+    .count-fill,
+    .save-item-btn {
+        min-height: 2.75rem;
+        border-radius: 0.375rem;
+    }
+    .count-readonly {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #e9e9e7;
+        background: #f7f7f5;
+        color: #37352f;
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+    .count-fill {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1.5px solid #2383e2;
+        background: #f3f8fd;
+        color: #37352f;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+    .count-fill::placeholder {
+        color: #6b9ec4;
+        font-weight: 500;
+    }
+    .count-fill:focus {
+        outline: none;
+        background: #ffffff;
+        border-color: #1a6dc0;
+        box-shadow: 0 0 0 3px rgba(35, 131, 226, 0.22);
+    }
+    .count-fill[readonly] {
+        border-color: #e9e9e7;
+        background: #f7f7f5;
+        box-shadow: none;
+    }
+    .save-item-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        width: 100%;
+        padding: 0 0.85rem;
+        border: 0;
+        background: #37352f;
+        color: #ffffff;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    .save-item-btn:hover { background: #26241f; }
+    .save-item-btn:disabled { opacity: 0.6; }
+    .save-item-btn .saved-icon,
+    .save-item-btn.is-saved .save-icon { display: none; }
+    .save-item-btn.is-saved { background: #0f7b6c; }
+    .save-item-btn.is-saved .saved-icon { display: block; }
+    .save-item-btn.is-saved .save-word { display: none; }
+    .save-item-btn .saved-word { display: none; }
+    .save-item-btn.is-saved .saved-word { display: inline; }
+    @media (min-width: 1024px) {
+        .count-grid {
+            grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1.25fr) minmax(0, 1.25fr) auto;
+            align-items: end;
+        }
+        .count-grid.is-locked {
+            grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1.2fr) minmax(0, 1.2fr);
+        }
+        .save-item-btn {
+            width: 2.75rem;
+            padding: 0;
+        }
+        .save-item-btn .save-word,
+        .save-item-btn.is-saved .saved-word { display: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="POST" id="auditCountForm" class="space-y-4 pb-28">
+
+    {% csrf_token %}
+
+    <!-- Encabezado del conteo -->
+    <div class="bg-white border border-slate-200 rounded-lg p-4 sm:p-5 space-y-4">
+        <nav class="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
+            <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+            <span>/</span>
+            {% if audit.session %}
+            <a href="{% url 'stock:stock_count_session_list' %}" class="hover:text-slate-900">Conteos</a>
+            <span>/</span>
+            <a href="{% url 'stock:stock_count_session_detail' audit.session.pk %}" class="hover:text-slate-900 truncate max-w-[10rem]">{{ audit.session.title }}</a>
+            <span>/</span>
+            <span class="text-slate-800 font-medium">{{ audit.location_area|default:audit.title }}</span>
+            {% else %}
+            <a href="{% url 'stock:stock_audit_list' %}" class="hover:text-slate-900">Tomas de Inventario</a>
+            <span>/</span>
+            <span class="text-slate-800 font-medium">{{ audit.title }}</span>
+            {% endif %}
+        </nav>
+
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">{{ audit.title }}</h1>
+                    {% if audit.status == 'completed' %}
+                    <span class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                        <i data-lucide="check" class="w-3 h-3"></i> Aplicado
+                    </span>
+                    {% else %}
+                    <span class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                        <i data-lucide="edit-2" class="w-3 h-3"></i> Borrador
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-500">
+                    <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> {{ audit.audit_date|date:"d/m/Y" }}</span>
+                    {% if audit.category %}<span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Área: <strong class="text-slate-700 font-medium">{{ audit.category.name }}</strong></span>{% endif %}
+                    {% if audit.responsible %}<span class="flex items-center gap-1"><i data-lucide="user" class="w-3.5 h-3.5"></i> {{ audit.responsible }}</span>{% endif %}
+                </div>
+            </div>
+            <a href="{% url 'stock:stock_audit_order_report' audit.pk %}" class="no-print inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-medium transition">
+                <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i> Ver Reporte
+            </a>
+        </div>
+
+        {% if audit.status == 'completed' %}
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-600 flex items-start gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5"></i>
+            <span>{% if audit.session %}Esta área ya fue finalizada. El stock se aplicará al inventario de forma consolidada al finalizar el conteo completo.{% else %}Este inventario ya fue finalizado y actualizó el stock. Puedes consultarlo o emitir las órdenes.{% endif %}</span>
+        </div>
+        {% endif %}
+
+        <!-- Buscador y filtro de estado -->
+        <div class="no-print pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div class="relative flex-1">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                </div>
+                <input type="text" id="auditSearchInput" placeholder="Buscar producto o código..." class="form-input pl-9">
+            </div>
+            <select id="quickStatusSelect" class="form-select sm:w-48">
+                <option value="PENDING" selected>Pendientes por contar</option>
+                <option value="COUNTED">Contados</option>
+                <option value="ALL">Mostrar todos</option>
+                <option value="LOW">Bajo mínimo (contados)</option>
+            </select>
+            {% if audit.status != 'completed' %}
+            <button type="button" id="markZeroBtn" data-url="{% url 'stock:stock_audit_mark_pending_zero' audit.pk %}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-50 transition whitespace-nowrap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                Marcar pendientes a 0
+            </button>
+            {% endif %}
+            <input type="text" id="auditSearchInput" class="form-input sm:w-56" placeholder="Buscar producto...">
+        </div>
+    </div>
+
+    <!-- Lista de productos del área -->
+    <div class="space-y-2" id="auditList">
+        {% for item in items %}
+        <div class="audit-row bg-white border border-slate-200 rounded-lg p-3 sm:p-4 transition"
+             id="row-{{ item.id }}"
+             data-item-id="{{ item.id }}"
+             data-category="{{ item.product.locations_display }}"
+             data-name="{{ item.product.name|lower }} {{ item.product.sku|lower }} {{ item.product.detalle_ubicacion|lower }}"
+             data-min="{{ item.min_stock|unlocalize }}"
+             data-ideal="{{ item.ideal_stock|unlocalize }}"
+             data-prev="{{ item.previous_stock|unlocalize }}"
+             data-has-min="{% if item.product.min_stock %}1{% else %}0{% endif %}"
+             data-product-min="{% if item.product.min_stock %}{{ item.product.min_stock|unlocalize }}{% else %}0{% endif %}"
+             data-save-url="{% url 'stock:stock_audit_item_save' audit.pk item.id %}">
+
+            <!-- Título del producto + estado -->
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">#{{ item.product.sequence_number }}</span>
+                        <span class="font-medium text-slate-900 truncate">{{ item.product.name }}</span>
+                    </div>
+                    <div class="mt-1 text-[11px] text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        <span class="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{{ item.product.get_unit_display }}</span>
+                        {% if item.product.detalle_ubicacion %}<span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i>{{ item.product.detalle_ubicacion }}</span>{% endif %}
+                        {% if item.product.supplier %}<span class="hidden sm:inline">{{ item.product.supplier.name }}</span>{% endif %}
+                    </div>
+                </div>
+                <div class="flex-shrink-0 flex flex-col items-end gap-1.5">
+                    <div id="status-cell-{{ item.id }}">
+                        {% if item.counted_stock is None %}
+                        <span class="status-badge inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-500">Sin contar</span>
+                        {% elif item.product.min_stock and item.counted_stock <= item.product.min_stock %}
+                        <span class="status-badge inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">Bajo mínimo</span>
+                        {% elif item.product.min_stock %}
+                        <span class="status-badge inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Suficiente</span>
+                        {% else %}
+                        <span class="status-badge inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Contado</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="count-grid {% if audit.status == 'completed' %}is-locked{% endif %}">
+                <div class="min-w-0">
+                    <span class="count-label">Mínimo</span>
+                    <div class="count-readonly">{% if item.product.min_stock %}{{ item.product.min_stock }}{% else %}Sin mínimo{% endif %}</div>
+                </div>
+                <div class="min-w-0">
+                    <span class="count-label">Previo</span>
+                    <div class="count-readonly">{{ item.previous_stock }}</div>
+                </div>
+                <div class="min-w-0">
+                    <label class="count-label" for="counted_{{ item.id }}">Cantidad a contar</label>
+                    <input type="number"
+                           step="0.01"
+                           min="0"
+                           inputmode="decimal"
+                           name="counted_{{ item.id }}"
+                           id="counted_{{ item.id }}"
+                           value="{% if item.counted_stock is not None %}{{ item.counted_stock|unlocalize }}{% endif %}"
+                           placeholder="Escribe la cantidad"
+                           class="count-fill counted-input"
+                           data-item-id="{{ item.id }}"
+                           data-min="{{ item.min_stock|unlocalize }}"
+                           data-ideal="{{ item.ideal_stock|unlocalize }}"
+                           {% if audit.status == 'completed' %}readonly{% endif %}>
+                </div>
+                <div class="min-w-0">
+                    <div class="field-head flex items-baseline justify-between gap-2">
+                        <label class="count-label mb-0" for="order_{{ item.id }}">Cantidad a pedir</label>
+                        <span class="text-[11px] text-slate-400 mb-1 shrink-0">Sugerido <strong id="sugg-display-{{ item.id }}" class="text-slate-600 font-medium">{{ item.suggested_order }}</strong></span>
+                    </div>
+                    <input type="number"
+                           step="0.01"
+                           min="0"
+                           inputmode="decimal"
+                           name="order_{{ item.id }}"
+                           id="order_{{ item.id }}"
+                           value="{{ item.final_order|unlocalize }}"
+                           placeholder="0.00"
+                           class="count-fill order-input"
+                           data-item-id="{{ item.id }}"
+                           {% if audit.status == 'completed' %}readonly{% endif %}>
+                </div>
+                {% if audit.status != 'completed' %}
+                <div class="min-w-0">
+                    <span class="count-label hidden lg:block" aria-hidden="true">&nbsp;</span>
+                    <button type="button"
+                            class="save-item-btn {% if item.counted_stock is not None %}is-saved{% endif %}"
+                            data-item-id="{{ item.id }}"
+                            title="Guardar conteo"
+                            aria-label="Guardar conteo de {{ item.product.name }}">
+                        <i data-lucide="save" class="save-icon w-4 h-4"></i>
+                        <i data-lucide="check" class="saved-icon w-4 h-4"></i>
+                        <span class="save-word">Guardar</span>
+                        <span class="saved-word">Guardado</span>
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="mt-3">
+                <label class="count-label" for="notes_{{ item.id }}">Observación (opcional)</label>
+                <input type="text"
+                       name="notes_{{ item.id }}"
+                       id="notes_{{ item.id }}"
+                       value="{{ item.notes }}"
+                       placeholder="Escribe una nota si hace falta"
+                       class="count-fill notes-input font-normal"
+                       {% if audit.status == 'completed' %}readonly{% endif %}>
+            </div>
+        </div>
+        {% empty %}
+        <div class="bg-white border border-slate-200 rounded-lg p-8 text-center text-sm text-slate-500">
+            No hay productos asignados a esta área.
+        </div>
+        {% endfor %}
+
+        <div id="noResults" class="hidden bg-white border border-slate-200 rounded-lg p-8 text-center text-sm text-slate-500">
+            No se encontraron productos con ese criterio.
+        </div>
+    </div>
+
+    <!-- Barra inferior fija -->
+    <div class="sticky-audit-bar no-print bg-white border border-slate-200 rounded-lg p-3 sm:p-4 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-5 text-xs">
+            <div>
+                <span class="text-slate-500 block">Contados</span>
+                <span class="font-semibold text-slate-900 text-base"><span id="countedCount">0</span> / {{ items|length }}</span>
+            </div>
+            <div class="h-8 w-px bg-slate-200"></div>
+            <div>
+                <span class="text-slate-500 block">A pedir</span>
+                <span class="font-semibold text-slate-900 text-base" id="toOrderCount">0</span>
+            </div>
+        </div>
+
+        {% if audit.status != 'completed' %}
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+            <button type="submit" name="action" value="save_draft"
+                    class="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium text-sm transition">
+                <i data-lucide="save" class="w-4 h-4"></i> Guardar
+            </button>
+            <button type="button" onclick="confirmCompleteAudit()"
+                    class="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm transition">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i> {% if audit.session %}Finalizar Área{% else %}Finalizar{% endif %}
+            </button>
+        </div>
+        {% else %}
+        <a href="{% url 'stock:stock_audit_order_report' audit.pk %}" class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm transition">
+            <i data-lucide="file-text" class="w-4 h-4"></i> Emitir Reporte
+        </a>
+        {% endif %}
+    </div>
+
+    <input type="hidden" name="action" id="formActionInput" value="save_draft">
+</form>
+
+<div id="markZeroModal" class="fixed inset-0 bg-slate-950/40 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200">
+        <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+        <h3 class="text-base font-semibold text-slate-900">Marcar pendientes a cero</h3>
+        <p id="markZeroMessage" class="text-sm text-slate-600"></p>
+        <p id="markZeroError" class="hidden text-sm text-rose-700"></p>
+        <div class="flex items-center gap-2 pt-1">
+            <button type="button" id="markZeroCancel" class="flex-1 py-2.5 rounded-md border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-100 transition">Cancelar</button>
+            <button type="button" id="markZeroConfirm" class="flex-1 py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition">Colocar en cero</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación -->
+<div id="completeModal" class="fixed inset-0 bg-slate-950/40 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200">
+        <div class="w-10 h-10 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
+            <i data-lucide="clipboard-check" class="w-5 h-5"></i>
+        </div>
+        {% if audit.session %}
+        <h3 class="text-base font-semibold text-slate-900">¿Finalizar el conteo de esta área?</h3>
+        <p class="text-sm text-slate-600">Esta área quedará marcada como finalizada. El stock se actualizará al finalizar el conteo completo. Podrás reabrirla si necesitas corregir.</p>
+        {% else %}
+        <h3 class="text-base font-semibold text-slate-900">¿Finalizar conteo de inventario?</h3>
+        <p class="text-sm text-slate-600">Las cantidades contadas se actualizarán como stock oficial y se generará la solicitud de pedidos.</p>
+        {% endif %}
+        <div class="flex items-center gap-2 pt-1">
+            <button type="button" onclick="closeCompleteModal()" class="flex-1 py-2.5 rounded-md border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-100 transition">Continuar</button>
+            <button type="button" onclick="submitFinalAudit()" class="flex-1 py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition">Finalizar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function rowCountedInput(row) { return row.querySelector('.counted-input'); }
+    function isRowCounted(row) {
+        const input = rowCountedInput(row);
+        return !!(input && input.value.trim() !== '');
+    }
+    function csrfToken() {
+        const input = document.querySelector('#auditCountForm input[name=csrfmiddlewaretoken]');
+        return input ? input.value : '';
+    }
+    function markRowUnsaved(row) {
+        const btn = row.querySelector('.save-item-btn');
+        if (btn) btn.classList.remove('is-saved');
+    }
+
+    const BADGE_OFF = '<span class="status-badge inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-500">Sin contar</span>';
+    const BADGE_LOW = '<span class="status-badge inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">Bajo mínimo</span>';
+    const BADGE_OK = '<span class="status-badge inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Suficiente</span>';
+    const BADGE_COUNTED = '<span class="status-badge inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Contado</span>';
+
+    function refreshRowStatus(row) {
+        const statusCell = row.querySelector('[id^="status-cell-"]');
+        if (!statusCell) return;
+        if (!isRowCounted(row)) {
+            statusCell.innerHTML = BADGE_OFF;
+            return;
+        }
+        const hasMin = row.getAttribute('data-has-min') === '1';
+        const input = rowCountedInput(row);
+        const min = parseFloat(row.getAttribute('data-product-min')) || 0;
+        const val = parseFloat(input ? input.value : '') || 0;
+        if (!hasMin) statusCell.innerHTML = BADGE_COUNTED;
+        else statusCell.innerHTML = (val <= min) ? BADGE_LOW : BADGE_OK;
+    }
+
+    function updateMetrics() {
+        let countedTotal = 0;
+        let toOrderTotal = 0;
+
+        document.querySelectorAll('.audit-row').forEach(row => {
+            if (isRowCounted(row)) countedTotal++;
+            const orderInput = row.querySelector('.order-input');
+            if (orderInput && (parseFloat(orderInput.value) || 0) > 0) toOrderTotal++;
+        });
+
+        const countedSpan = document.getElementById('countedCount');
+        const toOrderSpan = document.getElementById('toOrderCount');
+        if (countedSpan) countedSpan.textContent = countedTotal;
+        if (toOrderSpan) toOrderSpan.textContent = toOrderTotal;
+    }
+
+    function applySavedItem(data) {
+        const row = document.getElementById(`row-${data.id}`);
+        if (!row) return;
+        const countedInput = rowCountedInput(row);
+        const orderInput = row.querySelector('.order-input');
+        const suggDisplay = document.getElementById(`sugg-display-${data.id}`);
+        if (countedInput) countedInput.value = data.counted_stock == null ? '' : data.counted_stock;
+        if (orderInput && data.final_order != null) orderInput.value = data.final_order;
+        if (suggDisplay && data.suggested_order != null) suggDisplay.textContent = data.suggested_order;
+        const btn = row.querySelector('.save-item-btn');
+        if (btn) btn.classList.toggle('is-saved', !data.pending);
+        refreshRowStatus(row);
+    }
+
+    async function saveItem(row) {
+        const btn = row.querySelector('.save-item-btn');
+        const url = row.getAttribute('data-save-url');
+        if (!url) return;
+        const countedInput = rowCountedInput(row);
+        const orderInput = row.querySelector('.order-input');
+        const notesInput = row.querySelector('.notes-input');
+        const body = new FormData();
+        body.append('counted', countedInput ? countedInput.value : '');
+        body.append('order', orderInput ? orderInput.value : '');
+        body.append('notes', notesInput ? notesInput.value : '');
+        if (btn) btn.disabled = true;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+                body,
+            });
+            const data = await response.json();
+            if (!response.ok || !data.ok) throw new Error(data.error || 'No se pudo guardar');
+            applySavedItem(data.item);
+            if (btn && data.item.pending) {
+                btn.classList.add('is-saved');
+                setTimeout(() => btn.classList.remove('is-saved'), 1200);
+            }
+            updateMetrics();
+            applyFilters();
+        } catch (error) {
+            window.alert(error.message || 'No se pudo guardar el conteo.');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    document.querySelectorAll('.counted-input').forEach(input => {
+        input.addEventListener('input', function() {
+            const row = this.closest('.audit-row');
+            const itemId = this.dataset.itemId;
+            const minStock = parseFloat(this.dataset.min) || 0;
+            const idealStock = parseFloat(this.dataset.ideal) || 0;
+            const orderInput = document.getElementById(`order_${itemId}`);
+            const suggDisplay = document.getElementById(`sugg-display-${itemId}`);
+
+            if (this.value.trim() !== '') {
+                const countedVal = parseFloat(this.value) || 0;
+                const target = idealStock > 0 ? idealStock : minStock;
+                const suggested = Math.max(0, target - countedVal);
+                if (orderInput) orderInput.value = suggested.toFixed(2);
+                if (suggDisplay) suggDisplay.textContent = suggested.toFixed(2);
+            }
+            markRowUnsaved(row);
+            refreshRowStatus(row);
+            updateMetrics();
+        });
+        input.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                saveItem(this.closest('.audit-row'));
+            }
+        });
+    });
+
+    document.querySelectorAll('.order-input, .notes-input').forEach(input => {
+        input.addEventListener('input', function() {
+            markRowUnsaved(this.closest('.audit-row'));
+            updateMetrics();
+        });
+        input.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                saveItem(this.closest('.audit-row'));
+            }
+        });
+    });
+
+    document.querySelectorAll('.save-item-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            saveItem(this.closest('.audit-row'));
+        });
+    });
+
+    const searchInput = document.getElementById('auditSearchInput');
+    const rows = document.querySelectorAll('.audit-row');
+    const noResults = document.getElementById('noResults');
+    let currentQuickStatus = 'PENDING';
+
+    function applyFilters() {
+        const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        let visible = 0;
+
+        rows.forEach(row => {
+            const nameData = row.getAttribute('data-name') || '';
+            const countedInput = rowCountedInput(row);
+            const countedVal = countedInput ? countedInput.value.trim() : '';
+            const counted = isRowCounted(row);
+
+            let matches = query === '' || nameData.includes(query);
+
+            if (currentQuickStatus === 'PENDING') {
+                matches = matches && !counted;
+            } else if (currentQuickStatus === 'COUNTED') {
+                matches = matches && counted;
+            } else if (currentQuickStatus === 'LOW') {
+                const hasMin = row.getAttribute('data-has-min') === '1';
+                const productMin = parseFloat(row.getAttribute('data-product-min')) || 0;
+                const num = parseFloat(countedVal) || 0;
+                matches = matches && counted && hasMin && num <= productMin;
+            }
+
+            row.style.display = matches ? '' : 'none';
+            if (matches) visible++;
+        });
+
+        if (noResults) noResults.classList.toggle('hidden', visible !== 0);
+    }
+
+    if (searchInput) searchInput.addEventListener('input', applyFilters);
+
+    const statusSelect = document.getElementById('quickStatusSelect');
+    if (statusSelect) {
+        currentQuickStatus = statusSelect.value;
+        statusSelect.addEventListener('change', function() {
+            currentQuickStatus = this.value;
+            applyFilters();
+        });
+    }
+
+    const markZeroBtn = document.getElementById('markZeroBtn');
+    const markZeroModal = document.getElementById('markZeroModal');
+    const markZeroMessage = document.getElementById('markZeroMessage');
+    const markZeroError = document.getElementById('markZeroError');
+    const markZeroConfirm = document.getElementById('markZeroConfirm');
+    const markZeroCancel = document.getElementById('markZeroCancel');
+    let pendingZeroRows = [];
+
+    function openMarkZeroModal() {
+        if (!markZeroModal) return;
+        markZeroModal.classList.remove('hidden');
+        markZeroModal.classList.add('flex');
+    }
+    function closeMarkZeroModal() {
+        if (!markZeroModal) return;
+        markZeroModal.classList.add('hidden');
+        markZeroModal.classList.remove('flex');
+        if (markZeroError) markZeroError.classList.add('hidden');
+        if (markZeroConfirm) {
+            markZeroConfirm.disabled = false;
+            markZeroConfirm.textContent = 'Colocar en cero';
+        }
+    }
+
+    if (markZeroBtn) {
+        markZeroBtn.addEventListener('click', function() {
+            pendingZeroRows = Array.from(document.querySelectorAll('.audit-row')).filter(row => !isRowCounted(row));
+            const total = pendingZeroRows.length;
+            const noun = total === 1 ? 'producto' : 'productos';
+            if (markZeroMessage) {
+                markZeroMessage.textContent = total
+                    ? `Esta acción colocará el conteo a cero de ${total} ${noun}.`
+                    : 'No hay productos pendientes. Ningún conteo se va a modificar.';
+            }
+            if (markZeroConfirm) markZeroConfirm.classList.toggle('hidden', total === 0);
+            if (markZeroError) markZeroError.classList.add('hidden');
+            openMarkZeroModal();
+        });
+    }
+    if (markZeroCancel) markZeroCancel.addEventListener('click', closeMarkZeroModal);
+    if (markZeroModal) {
+        markZeroModal.addEventListener('click', function(event) {
+            if (event.target === markZeroModal) closeMarkZeroModal();
+        });
+    }
+    if (markZeroConfirm) {
+        markZeroConfirm.addEventListener('click', async function() {
+            if (!pendingZeroRows.length || !markZeroBtn) return;
+            const body = new FormData();
+            pendingZeroRows.forEach(row => body.append('item_ids', row.getAttribute('data-item-id')));
+            markZeroConfirm.disabled = true;
+            markZeroConfirm.textContent = 'Guardando...';
+            try {
+                const response = await fetch(markZeroBtn.dataset.url, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+                    body,
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) throw new Error(data.error || 'No se pudo guardar');
+                (data.items || []).forEach(applySavedItem);
+                updateMetrics();
+                applyFilters();
+                closeMarkZeroModal();
+            } catch (error) {
+                if (markZeroError) {
+                    markZeroError.textContent = error.message || 'No se pudo guardar el conteo.';
+                    markZeroError.classList.remove('hidden');
+                }
+                markZeroConfirm.disabled = false;
+                markZeroConfirm.textContent = 'Colocar en cero';
+            }
+        });
+    }
+
+    function confirmCompleteAudit() {
+        const modal = document.getElementById('completeModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+    function closeCompleteModal() {
+        const modal = document.getElementById('completeModal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    function submitFinalAudit() {
+        document.getElementById('formActionInput').value = 'complete';
+        document.getElementById('auditCountForm').submit();
+    }
+
+    updateMetrics();
+    applyFilters();
+</script>
+{% endblock %}

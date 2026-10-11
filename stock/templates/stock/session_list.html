@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Registros de Conteo de Stock | Restaurante{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <i data-lucide="clipboard-list" class="w-7 h-7 text-emerald-600"></i>
+                Registros de Conteo de Stock
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">
+                Crea un conteo por fecha y registra las existencias de varias áreas o ubicaciones en un solo registro.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'stock:stock_audit_list' %}" class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition">
+                <i data-lucide="history" class="w-4 h-4"></i> Conteos individuales
+            </a>
+            <a href="{% url 'stock:stock_count_session_create' %}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-700/20 transition">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i> Nuevo Registro de Conteo
+            </a>
+        </div>
+    </div>
+
+    <!-- Sessions List -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {% if sessions %}
+        <div class="divide-y divide-slate-100">
+            {% for session in sessions %}
+            <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/70 transition">
+                <div class="space-y-1 min-w-0">
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                        <span class="font-bold text-base text-slate-900">{{ session.title }}</span>
+                        {% if session.status == 'completed' %}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Consolidado y Aplicado
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> En Proceso
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="text-xs text-slate-500 flex flex-wrap items-center gap-4 pt-1">
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i>
+                            Fecha: <strong class="text-slate-700 font-semibold">{{ session.count_date|date:"d/m/Y" }}</strong>
+                        </span>
+                        {% if session.responsible %}
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="user" class="w-3.5 h-3.5 text-slate-400"></i>
+                            Responsable: <strong class="text-slate-700 font-semibold">{{ session.responsible }}</strong>
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Progress metric -->
+                    <div class="flex items-center gap-3 text-xs pt-1 flex-wrap">
+                        <div class="flex items-center gap-1 text-slate-600">
+                            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-600"></i>
+                            Áreas: <strong>{{ session.completed_areas }} / {{ session.total_areas }}</strong> finalizadas
+                        </div>
+                        <span class="text-slate-300">•</span>
+                        <div class="flex items-center gap-1 text-slate-600">
+                            <i data-lucide="check-square" class="w-3.5 h-3.5 text-emerald-600"></i>
+                            Productos contados: <strong>{{ session.total_counted_products }}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-2 self-start md:self-center flex-wrap">
+                    <a href="{% url 'stock:stock_count_session_detail' session.pk %}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl {% if session.status == 'completed' %}bg-slate-100 hover:bg-slate-200 text-slate-700{% else %}bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm{% endif %} font-bold text-xs transition">
+                        <i data-lucide="{% if session.status == 'completed' %}eye{% else %}edit-3{% endif %}" class="w-3.5 h-3.5"></i>
+                        {% if session.status == 'completed' %}Ver Registro{% else %}Continuar Conteo{% endif %}
+                    </a>
+                    {% if session.total_areas %}
+                    <a href="{% url 'stock:consolidated_report_view' %}?audits={{ session.audit_ids_csv }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition">
+                        <i data-lucide="layers" class="w-3.5 h-3.5 text-amber-400"></i>
+                        Consolidado
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-400">
+            <i data-lucide="clipboard-list" class="w-12 h-12 mx-auto text-slate-300 mb-3"></i>
+            <h3 class="text-base font-bold text-slate-700">No hay registros de conteo</h3>
+            <p class="text-sm mt-1">Crea tu primer registro, selecciona las áreas y empieza a contar.</p>
+            <a href="{% url 'stock:stock_count_session_create' %}" class="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-md transition">
+                <i data-lucide="plus" class="w-4 h-4"></i> Crear Primer Registro de Conteo
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

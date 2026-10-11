@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Catálogo de Productos | Inventario Restaurante{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <i data-lucide="package" class="w-7 h-7 text-emerald-600"></i>
+                Catálogo de Insumos y Productos
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">Control de inventario, cantidades mínimas configuradas y ubicación en el restaurante.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'stock:product_create' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-sm transition">
+                <i data-lucide="plus" class="w-4 h-4"></i> Nuevo Insumo
+            </a>
+            <a href="{% url 'stock:product_import' %}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs transition">
+                <i data-lucide="upload" class="w-4 h-4 text-slate-500"></i> Importar Excel
+            </a>
+            <a href="{% url 'stock:quick_order_report' %}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold text-xs transition">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i> Ver Bajo Mínimo
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters & Search Bar Card -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+        <form method="GET" action="{% url 'stock:product_list' %}" class="flex flex-col md:flex-row items-center gap-3">
+            <!-- Search Input -->
+            <div class="relative flex-1 w-full">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                </div>
+                <input type="text" id="liveSearchInput" name="q" value="{{ query }}" placeholder="Buscar por nombre, código SKU o ubicación (ej: Pechuga, Cámara, BAR-01)..." class="form-input pl-9 text-sm">
+            </div>
+
+            <!-- Category Filter -->
+            <div class="w-full md:w-56">
+                <select name="category" onchange="this.form.submit()" class="form-select text-sm">
+                    <option value="">Todas las Áreas / Categorías</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if selected_category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Supplier Filter -->
+            <div class="w-full md:w-56">
+                <select name="supplier" onchange="this.form.submit()" class="form-select text-sm">
+                    <option value="">Todos los Proveedores</option>
+                    {% for supp in suppliers %}
+                    <option value="{{ supp.id }}" {% if selected_supplier == supp.id|stringformat:"s" %}selected{% endif %}>{{ supp.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Submit / Reset -->
+            <div class="flex items-center gap-2 w-full md:w-auto">
+                <button type="submit" class="w-full md:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition">
+                    Filtrar
+                </button>
+                {% if query or selected_category or selected_supplier or selected_status %}
+                <a href="{% url 'stock:product_list' %}" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-semibold transition">
+                    Limpiar
+                </a>
+                {% endif %}
+            </div>
+        </form>
+
+        <!-- Quick Status Pills -->
+        <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
+            <span class="text-slate-400 font-medium">Estado:</span>
+            <a href="{% url 'stock:product_list' %}" class="px-2.5 py-1 rounded-lg font-semibold transition {% if not selected_status %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                Todos ({{ total_count }})
+            </a>
+            <a href="{% url 'stock:product_list' %}?status=low{% if query %}&q={{ query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}" class="px-2.5 py-1 rounded-lg font-semibold transition {% if selected_status == 'low' %}bg-amber-600 text-white{% else %}bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100{% endif %}">
+                Bajo Mínimo ⚠️
+            </a>
+            <a href="{% url 'stock:product_list' %}?status=out{% if query %}&q={{ query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}" class="px-2.5 py-1 rounded-lg font-semibold transition {% if selected_status == 'out' %}bg-rose-600 text-white{% else %}bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100{% endif %}">
+                Agotados ❌
+            </a>
+            <a href="{% url 'stock:product_list' %}?status=good{% if query %}&q={{ query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}" class="px-2.5 py-1 rounded-lg font-semibold transition {% if selected_status == 'good' %}bg-emerald-600 text-white{% else %}bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100{% endif %}">
+                Óptimos ✅
+            </a>
+        </div>
+    </div>
+
+    <!-- Products Table Card -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {% if products %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-600" id="productsTable">
+                <thead class="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                    <tr>
+                        <th class="px-5 py-3">Insumo / Descripción</th>
+                        <th class="px-4 py-3">Área / Categoría</th>
+                        <th class="px-4 py-3 text-right">Stock Actual</th>
+                        <th class="px-4 py-3 text-right">Cantidad Mínima</th>
+                        <th class="px-4 py-3 text-right">Stock Ideal</th>
+                        <th class="px-4 py-3 text-right">Costo Est.</th>
+                        <th class="px-4 py-3 text-center">Estado</th>
+                        <th class="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for p in products %}
+                    <tr class="hover:bg-slate-50/70 transition product-row" data-search="{{ p.name|lower }} {{ p.sku|lower }} {{ p.detalle_ubicacion|lower }} {{ p.locations_display|lower }}">
+                        <!-- Name & Supplier -->
+                        <td class="px-5 py-3.5">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="Secuencia de orden en reportes">#{{ p.sequence_number }}</span>
+                                <div class="font-bold text-slate-900">
+                                    <a href="{% url 'stock:product_detail' p.pk %}" class="hover:text-emerald-600 hover:underline">
+                                        {{ p.name }}
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5 ml-8">
+                                {% if p.sku %}<span class="font-mono bg-slate-100 px-1 rounded">{{ p.sku }}</span>{% endif %}
+                                {% if p.detalle_ubicacion %}<span>📍 {{ p.detalle_ubicacion }}</span>{% endif %}
+                                {% if p.supplier %}<span class="text-slate-500">🏢 {{ p.supplier.name }}</span>{% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Category -->
+                        <td class="px-4 py-3.5 text-xs">
+                            {% if p.locations_display != "Sin ubicación" %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium">
+                                {{ p.locations_display }}
+                            </span>
+                            {% else %}
+                            <span class="text-slate-400 italic">General</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Current Stock -->
+                        <td class="px-4 py-3.5 text-right font-extrabold text-base {% if p.is_out_of_stock %}text-rose-600{% elif p.is_below_minimum %}text-amber-600{% else %}text-slate-900{% endif %}">
+                            {{ p.current_stock }}
+                            <span class="text-xs font-normal text-slate-400 block">{{ p.get_unit_display }}</span>
+                        </td>
+
+                        <!-- Minimum Stock -->
+                        <td class="px-4 py-3.5 text-right font-semibold text-slate-700">
+                            {{ p.min_stock }}
+                            <span class="text-xs font-normal text-slate-400 block">{{ p.get_unit_display }}</span>
+                        </td>
+
+                        <!-- Ideal Stock -->
+                        <td class="px-4 py-3.5 text-right text-slate-500">
+                            {{ p.ideal_stock }}
+                            <span class="text-xs font-normal text-slate-400 block">{{ p.get_unit_display }}</span>
+                        </td>
+
+                        <!-- Cost -->
+                        <td class="px-4 py-3.5 text-right font-medium text-slate-700">
+                            Q{{ p.cost_price|default_if_none:"0.00"|floatformat:"2u" }}
+                        </td>
+
+                        <!-- Status Badge -->
+                        <td class="px-4 py-3.5 text-center">
+                            {% if p.stock_status.code == 'unknown' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Sin definir
+                            </span>
+                            {% elif p.is_out_of_stock %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
+                                <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span> Agotado
+                            </span>
+                            {% elif p.is_below_minimum %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span> Bajo Mínimo
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Óptimo
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Actions -->
+                        <td class="px-4 py-3.5 text-center">
+                            <div class="inline-flex items-center gap-1">
+                                <a href="{% url 'stock:product_detail' p.pk %}" class="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition" title="Ficha y Movimientos">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </a>
+                                <a href="{% url 'stock:product_edit' p.pk %}" class="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Editar">
+                                    <i data-lucide="edit" class="w-4 h-4"></i>
+                                </a>
+                                <a href="{% url 'stock:product_delete' p.pk %}" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Eliminar / Archivar">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-400">
+            <i data-lucide="package-search" class="w-12 h-12 mx-auto text-slate-300 mb-3"></i>
+            <h3 class="text-base font-bold text-slate-700">No se encontraron productos</h3>
+            <p class="text-sm mt-1">Prueba cambiando los filtros o registra nuevos insumos.</p>
+            <a href="{% url 'stock:product_create' %}" class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-sm transition">
+                <i data-lucide="plus" class="w-4 h-4"></i> Crear Primer Producto
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Búsqueda instantánea en vivo en el cliente
+    const searchInput = document.getElementById('liveSearchInput');
+    const tableRows = document.querySelectorAll('.product-row');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase().trim();
+            tableRows.forEach(row => {
+                const searchData = row.getAttribute('data-search') || '';
+                if (searchData.includes(term)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+</script>
+{% endblock %}

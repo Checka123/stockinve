@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }} | Ficha de Insumo{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Breadcrumb & Actions -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <nav class="flex items-center gap-2 text-xs text-slate-500">
+            <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+            <span>/</span>
+            <a href="{% url 'stock:product_list' %}" class="hover:text-slate-900">Productos</a>
+            <span>/</span>
+            <span class="text-slate-800 font-semibold">{{ product.name }}</span>
+        </nav>
+
+        <div class="flex items-center gap-2">
+            <a href="{% url 'stock:product_edit' product.pk %}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition">
+                <i data-lucide="edit" class="w-3.5 h-3.5"></i> Editar
+            </a>
+            <a href="{% url 'stock:product_delete' product.pk %}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-semibold text-xs transition">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Archivar
+            </a>
+        </div>
+    </div>
+
+    <!-- Product Overview Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Col 1 & 2: Info Card -->
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            Secuencia #{{ product.sequence_number }}
+                        </span>
+                        {% if product.locations_display != "Sin ubicación" %}
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {{ product.locations_display }}
+                        </span>
+                        {% endif %}
+                        {% if product.sku %}
+                        <span class="font-mono text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                            {{ product.sku }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <h1 class="text-2xl font-black text-slate-900">{{ product.name }}</h1>
+                    {% if product.detalle_ubicacion %}
+                    <p class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-400"></i> Ubicación: <span class="font-semibold text-slate-700">{{ product.detalle_ubicacion }}</span>
+                    </p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    {% if product.stock_status.code == 'unknown' %}
+                    <span class="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-100 text-slate-700 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-slate-500"></span> {{ product.stock_status.label }}
+                    </span>
+                    {% elif product.is_out_of_stock %}
+                    <span class="px-3 py-1.5 rounded-xl text-xs font-black bg-rose-100 text-rose-800 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span> Agotado
+                    </span>
+                    {% elif product.is_below_minimum %}
+                    <span class="px-3 py-1.5 rounded-xl text-xs font-black bg-amber-100 text-amber-800 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-amber-600"></span> Bajo Mínimo
+                    </span>
+                    {% else %}
+                    <span class="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-600"></span> Stock Óptimo
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                <div>
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Stock Actual</span>
+                    <span class="text-2xl font-black {% if product.is_below_minimum %}text-amber-600{% else %}text-slate-900{% endif %}">
+                        {{ product.current_stock }}
+                    </span>
+                    <span class="text-xs text-slate-500 block">{{ product.get_unit_display }}</span>
+                </div>
+                <div>
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-amber-600 block">Mínimo Requerido</span>
+                    <span class="text-2xl font-black text-slate-700">
+                        {{ product.min_stock }}
+                    </span>
+                    <span class="text-xs text-slate-400 block">{{ product.get_unit_display }}</span>
+                </div>
+                <div>
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-600 block">Stock Objetivo</span>
+                    <span class="text-2xl font-black text-slate-700">
+                        {{ product.ideal_stock }}
+                    </span>
+                    <span class="text-xs text-slate-400 block">{{ product.get_unit_display }}</span>
+                </div>
+                <div>
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Costo Ref.</span>
+                    <span class="text-2xl font-black text-slate-900">
+                        Q{{ product.cost_price|default_if_none:"0.00"|floatformat:"2u" }}
+                    </span>
+                    <span class="text-xs text-slate-400 block">por {{ product.get_unit_display }}</span>
+                </div>
+            </div>
+
+            <!-- Proveedor info -->
+            {% if product.supplier %}
+            <div class="flex items-center justify-between p-4 rounded-xl bg-emerald-50/50 border border-emerald-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                        <i data-lucide="truck" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-500 uppercase">Proveedor Asignado</h4>
+                        <p class="text-sm font-black text-slate-900">{{ product.supplier.name }}</p>
+                        {% if product.supplier.phone %}
+                        <p class="text-xs text-slate-500">Tel: {{ product.supplier.phone }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <a href="https://wa.me/{{ product.supplier.phone|cut:' '|cut:'+'|cut:'-' }}?text=Hola%20necesitamos%20cotizar%20{{ product.name }}" target="_blank" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5">
+                    <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Contactar
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Col 3: Ajuste Rápido / Registro de Merma -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+            <div class="flex items-center gap-2">
+                <i data-lucide="zap" class="w-5 h-5 text-amber-500"></i>
+                <h3 class="text-base font-bold text-slate-900">Ajuste de Stock Rápido</h3>
+            </div>
+            <p class="text-xs text-slate-500">
+                Registra mermas inmediatas de cocina, desperdicios, o entradas de emergencia sin esperar a una toma de inventario.
+            </p>
+
+            <form method="POST" action="{% url 'stock:product_adjust_stock' product.pk %}" class="space-y-3 pt-2">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Tipo de Movimiento</label>
+                    {{ adjustment_form.movement_type }}
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">
+                        Cantidad (en {{ product.get_unit_display }})
+                    </label>
+                    {{ adjustment_form.quantity }}
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Motivo / Referencia</label>
+                    {{ adjustment_form.reference }}
+                </div>
+
+                <button type="submit" class="w-full mt-2 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5">
+                    <i data-lucide="check" class="w-4 h-4"></i> Aplicar Ajuste
+                </button>
+            </form>
+        </div>
+
+    </div>
+
+    <!-- Kardex / Historial de Movimientos -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+                    <i data-lucide="history" class="w-5 h-5 text-emerald-600"></i>
+                    Historial de Movimientos (Kardex)
+                </h3>
+                <p class="text-xs text-slate-500 mt-0.5">Auditorías, ingresos por compra, mermas y ajustes registrados para este insumo.</p>
+            </div>
+        </div>
+
+        {% if movements %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-600">
+                <thead class="bg-slate-50 font-semibold text-slate-500 uppercase border-b border-slate-100">
+                    <tr>
+                        <th class="px-5 py-3">Fecha y Hora</th>
+                        <th class="px-4 py-3">Tipo de Movimiento</th>
+                        <th class="px-4 py-3 text-right">Stock Previo</th>
+                        <th class="px-4 py-3 text-right">Variación</th>
+                        <th class="px-4 py-3 text-right">Nuevo Stock</th>
+                        <th class="px-4 py-3">Referencia / Observación</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for mov in movements %}
+                    <tr class="hover:bg-slate-50/70 transition">
+                        <td class="px-5 py-3 text-slate-500 font-mono">
+                            {{ mov.created_at|date:"d/m/Y H:i" }}
+                        </td>
+                        <td class="px-4 py-3 font-semibold">
+                            {% if mov.movement_type == 'audit' %}
+                            <span class="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">📋 Toma de Inventario</span>
+                            {% elif mov.movement_type == 'waste' %}
+                            <span class="text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md">🗑️ Merma / Caducidad</span>
+                            {% elif mov.movement_type == 'entry' %}
+                            <span class="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">📥 Entrada / Compra</span>
+                            {% else %}
+                            <span class="text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">⚙️ Ajuste Manual</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium">
+                            {{ mov.previous_stock }} {{ product.get_unit_display }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-black {% if mov.quantity > 0 %}text-emerald-600{% elif mov.quantity < 0 %}text-rose-600{% else %}text-slate-400{% endif %}">
+                            {{ mov.quantity }} {{ product.get_unit_display }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-extrabold text-slate-900">
+                            {{ mov.new_stock }} {{ product.get_unit_display }}
+                        </td>
+                        <td class="px-4 py-3 text-slate-500">
+                            {{ mov.reference|default:"-" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center text-slate-400">
+            <p class="text-xs">No hay movimientos registrados aún para este producto.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} | Restaurante{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-xs text-slate-500">
+        <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+        <span>/</span>
+        <a href="{% url 'stock:stock_count_session_list' %}" class="hover:text-slate-900">Conteos de Stock</a>
+        <span>/</span>
+        <span class="text-slate-800 font-semibold">Nuevo Registro</span>
+    </nav>
+
+    <!-- Card -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-black text-slate-900">Nuevo Registro de Conteo de Stock</h1>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Define la fecha del conteo y marca las áreas o ubicaciones que deseas contar. Podrás ir de una en una.
+                </p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <form method="POST" class="p-6 space-y-5">
+            {% csrf_token %}
+
+            {% if form.errors %}
+            <div class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+                {{ form.errors }}
+            </div>
+            {% endif %}
+
+            <!-- Título y Fecha -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Título / Identificador del Conteo <span class="text-rose-500">*</span>
+                    </label>
+                    {{ form.title }}
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Fecha del Conteo <span class="text-rose-500">*</span>
+                    </label>
+                    {{ form.count_date }}
+                </div>
+            </div>
+
+            <!-- Responsable -->
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Responsable / Chef / Encargado
+                </label>
+                {{ form.responsible }}
+                <span class="text-[11px] text-slate-400">Quién realiza la verificación general</span>
+            </div>
+
+            <!-- Áreas / Ubicaciones -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-800">
+                            Áreas / Ubicaciones a contar <span class="text-rose-500">*</span>
+                        </label>
+                        <span class="text-[11px] text-slate-500">Marca una o varias. Las que dejes pendientes podrás contarlas después.</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <button type="button" id="areasSelectAll" class="text-emerald-600 hover:underline font-semibold">Todas</button>
+                        <span class="text-slate-300">•</span>
+                        <button type="button" id="areasClearAll" class="text-slate-500 hover:underline">Ninguna</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="areasCheckboxList">
+                    {% for choice in form.areas %}
+                    <label class="area-option flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-white border border-slate-200 hover:border-emerald-300 cursor-pointer transition">
+                        {{ choice.tag }}
+                        <span class="text-sm text-slate-700 font-medium">{{ choice.choice_label }}</span>
+                    </label>
+                    {% empty %}
+                    <p class="text-xs text-slate-500 col-span-2">
+                        No hay áreas/categorías creadas. <a href="{% url 'stock:category_create' %}" class="text-emerald-600 font-semibold hover:underline">Crea una Área aquí</a>.
+                    </p>
+                    {% endfor %}
+                </div>
+                {% if form.areas.errors %}
+                <p class="text-xs text-rose-600">{{ form.areas.errors|join:", " }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Notas -->
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Notas u Observaciones del Turno
+                </label>
+                {{ form.notes }}
+            </div>
+
+            <div class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-start gap-3 text-xs text-emerald-900">
+                <i data-lucide="info" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+                <p>
+                    Al iniciar, se creará una hoja de conteo por cada área seleccionada, precargada con sus productos.
+                    Puedes contar las áreas en cualquier orden, dejarlas pendientes y, al finalizar, generar el
+                    consolidado general o un reporte independiente por área.
+                </p>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <a href="{% url 'stock:stock_count_session_list' %}" class="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition">
+                    Cancelar
+                </a>
+                <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition flex items-center gap-2">
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i> Crear Registro y Contar
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const areaCheckboxes = () => Array.from(document.querySelectorAll('#areasCheckboxList input[type="checkbox"]'));
+    document.getElementById('areasSelectAll')?.addEventListener('click', () => {
+        areaCheckboxes().forEach(cb => { cb.checked = true; });
+    });
+    document.getElementById('areasClearAll')?.addEventListener('click', () => {
+        areaCheckboxes().forEach(cb => { cb.checked = false; });
+    });
+</script>
+{% endblock %}

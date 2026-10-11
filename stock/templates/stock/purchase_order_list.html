@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Pedidos de Compra | Restaurante{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <i data-lucide="shopping-cart" class="w-7 h-7 text-emerald-600"></i>
+                Pedidos y Solicitudes de Compra
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">
+                Órdenes enviadas a proveedores, recepción de mercancías y seguimiento de pedidos.
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'stock:quick_order_report' %}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm transition">
+                <i data-lucide="zap" class="w-4 h-4"></i> Generar Pedido Express
+            </a>
+        </div>
+    </div>
+
+    <!-- Orders List Card -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {% if orders %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-600">
+                <thead class="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                    <tr>
+                        <th class="px-5 py-3">Código Pedido</th>
+                        <th class="px-4 py-3">Fecha</th>
+                        <th class="px-4 py-3">Proveedor</th>
+                        <th class="px-4 py-3 text-center">Ítems</th>
+                        <th class="px-4 py-3 text-right">Total Estimado</th>
+                        <th class="px-4 py-3 text-center">Estado</th>
+                        <th class="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for order in orders %}
+                    <tr class="hover:bg-slate-50/70 transition">
+                        <td class="px-5 py-3.5 font-bold font-mono text-slate-900">
+                            <a href="{% url 'stock:purchase_order_detail' order.pk %}" class="hover:text-emerald-600 hover:underline">
+                                {{ order.code }}
+                            </a>
+                        </td>
+                        <td class="px-4 py-3.5 text-xs text-slate-500">
+                            {{ order.date|date:"d/m/Y" }}
+                        </td>
+                        <td class="px-4 py-3.5 font-semibold text-slate-800">
+                            {{ order.supplier.name|default:"General / Varios" }}
+                        </td>
+                        <td class="px-4 py-3.5 text-center font-bold text-slate-700">
+                            {{ order.total_items }}
+                        </td>
+                        <td class="px-4 py-3.5 text-right font-black text-slate-900">
+                            Q{{ order.total_cost|floatformat:"2u" }}
+                        </td>
+                        <td class="px-4 py-3.5 text-center">
+                            {% if order.status == 'received' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Recibido
+                            </span>
+                            {% elif order.status == 'sent' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span> Enviado
+                            </span>
+                            {% elif order.status == 'cancelled' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
+                                Cancelado
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                                Pendiente
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3.5 text-center">
+                            <a href="{% url 'stock:purchase_order_detail' order.pk %}" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition">
+                                <i data-lucide="eye" class="w-3.5 h-3.5"></i> Ver Detalle
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-400">
+            <i data-lucide="shopping-bag" class="w-12 h-12 mx-auto text-slate-300 mb-3"></i>
+            <h3 class="text-base font-bold text-slate-700">No hay órdenes de compra registradas</h3>
+            <p class="text-sm mt-1">Crea una nueva toma de inventario o genera un pedido express a partir de insumos bajo mínimo.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

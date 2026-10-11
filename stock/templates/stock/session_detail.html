@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}{{ session.title }} | Registro de Conteo de Stock{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-5xl mx-auto">
+
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-xs text-slate-500">
+        <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+        <span>/</span>
+        <a href="{% url 'stock:stock_count_session_list' %}" class="hover:text-slate-900">Conteos de Stock</a>
+        <span>/</span>
+        <span class="text-slate-800 font-semibold">{{ session.title }}</span>
+    </nav>
+
+    <!-- Session Header -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+        <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ session.title }}</h1>
+                    {% if session.status == 'completed' %}
+                    <span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Consolidado y Aplicado
+                    </span>
+                    {% else %}
+                    <span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-100 text-amber-800 flex items-center gap-1 animate-pulse">
+                        <i data-lucide="edit-2" class="w-3.5 h-3.5"></i> En Proceso
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="flex flex-wrap items-center gap-4 text-xs text-slate-600 mt-2">
+                    <span class="flex items-center gap-1.5">
+                        <i data-lucide="calendar" class="w-4 h-4 text-emerald-600"></i>
+                        Fecha: <strong class="text-slate-800">{{ session.count_date|date:"d/m/Y" }}</strong>
+                    </span>
+                    {% if session.responsible %}
+                    <span class="flex items-center gap-1.5">
+                        <i data-lucide="user-check" class="w-4 h-4 text-emerald-600"></i>
+                        Responsable: <strong class="text-slate-800">{{ session.responsible }}</strong>
+                    </span>
+                    {% endif %}
+                    <span class="flex items-center gap-1.5">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-emerald-600"></i>
+                        Áreas: <strong class="text-slate-800">{{ session.completed_areas }} / {{ session.total_areas }}</strong>
+                    </span>
+                </div>
+                {% if session.notes %}
+                <p class="text-xs text-slate-500 mt-2 max-w-2xl">{{ session.notes }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-wrap items-center gap-2">
+                {% if session.total_areas %}
+                <a href="{% url 'stock:consolidated_report_view' %}?audits={{ session.audit_ids_csv }}" class="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition inline-flex items-center gap-1.5 shadow-sm">
+                    <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i> Ver Consolidado
+                </a>
+                {% endif %}
+                {% if session.status != 'completed' %}
+                <form method="POST" action="{% url 'stock:stock_count_session_finalize' session.pk %}" class="inline" onsubmit="return confirm('¿Finalizar este conteo? Se consolidarán todas las áreas contadas y se actualizará el stock del restaurante. Las áreas pendientes no se aplicarán.');">
+                    {% csrf_token %}
+                    <button type="submit" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition inline-flex items-center gap-1.5 shadow-md shadow-emerald-700/20">
+                        <i data-lucide="check-circle-2" class="w-4 h-4"></i> Finalizar y Consolidar
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div>
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1">
+                <span>Avance del conteo por áreas</span>
+                <span>{{ session.progress_percent }}%</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div class="h-full bg-emerald-500 rounded-full transition-all" style="width: {{ session.progress_percent }}%"></div>
+            </div>
+        </div>
+    </div>
+
+    {% if session.status == 'completed' %}
+    <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-start gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+        <span>Este conteo ya fue finalizado. Las cantidades contadas en todas las áreas se sumaron y actualizaron el stock del restaurante. Puedes consultar el consolidado o cada reporte por área.</span>
+    </div>
+    {% endif %}
+
+    <!-- Areas List -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="map-pinned" class="w-4 h-4 text-emerald-600"></i>
+                Áreas / Ubicaciones del Conteo
+            </h2>
+            <span class="text-xs text-slate-500">{{ session.total_areas }} área(s)</span>
+        </div>
+
+        {% if areas %}
+        <div class="divide-y divide-slate-100">
+            {% for area in areas %}
+            <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/60 transition">
+                <div class="space-y-2 min-w-0 flex-1">
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                        <span class="font-bold text-base text-slate-900 flex items-center gap-1.5">
+                            <i data-lucide="tag" class="w-4 h-4 text-emerald-600"></i>
+                            {{ area.location_area|default:area.category.name|default:"General" }}
+                        </span>
+                        {% if area.status == 'completed' %}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Finalizada
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Pendiente
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="check-square" class="w-3.5 h-3.5 text-emerald-600"></i>
+                            Contados: <strong>{{ area.n_counted }} / {{ area.n_items }}</strong>
+                        </span>
+                        <span class="text-slate-300">•</span>
+                        <span class="flex items-center gap-1 text-amber-700 font-semibold">
+                            <i data-lucide="shopping-bag" class="w-3.5 h-3.5 text-amber-600"></i>
+                            A pedir: {{ area.n_to_order }}
+                        </span>
+                    </div>
+
+                    <!-- mini progress -->
+                    <div class="w-full max-w-xs h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        {% if area.n_items %}
+                        <div class="h-full bg-emerald-500 rounded-full" style="width: {% widthratio area.n_counted area.n_items 100 %}%"></div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center gap-2 self-start md:self-center flex-wrap">
+                    <a href="{% url 'stock:stock_audit_count' area.pk %}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl {% if area.status == 'completed' %}bg-slate-100 hover:bg-slate-200 text-slate-700{% else %}bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm{% endif %} font-bold text-xs transition">
+                        <i data-lucide="{% if area.status == 'completed' %}eye{% else %}edit-3{% endif %}" class="w-3.5 h-3.5"></i>
+                        {% if area.status == 'completed' %}Revisar{% else %}Contar Área{% endif %}
+                    </a>
+                    <a href="{% url 'stock:stock_audit_order_report' area.pk %}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Reporte
+                    </a>
+
+                    {% if session.status != 'completed' %}
+                        {% if area.status == 'completed' %}
+                        <form method="POST" action="{% url 'stock:stock_count_session_reopen_area' session.pk area.pk %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-300 hover:bg-amber-50 text-amber-700 font-semibold text-xs transition" title="Reabrir para seguir contando">
+                                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Reabrir
+                            </button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{% url 'stock:stock_count_session_remove_area' session.pk area.pk %}" class="inline" onsubmit="return confirm('¿Quitar el área {{ area.location_area|escapejs }} de este conteo?');">
+                            {% csrf_token %}
+                            <button type="submit" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Quitar área">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="p-10 text-center text-slate-400">
+            <i data-lucide="map" class="w-10 h-10 mx-auto text-slate-300 mb-2"></i>
+            <p class="text-sm">Este registro aún no tiene áreas. Agrega una para empezar a contar.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Add Area Panel -->
+    {% if session.status != 'completed' %}
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3">
+            <i data-lucide="plus-circle" class="w-4 h-4 text-emerald-600"></i>
+            Agregar otra Área / Ubicación
+        </h3>
+        {% if available_areas %}
+        <form method="POST" action="{% url 'stock:stock_count_session_add_area' session.pk %}" class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+            {% csrf_token %}
+            <div class="flex-1">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Área disponible</label>
+                <select name="area" class="form-select" required>
+                    <option value="">Selecciona un área...</option>
+                    {% for cat in available_areas %}
+                    <option value="{{ cat.pk }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5 justify-center">
+                <i data-lucide="plus" class="w-4 h-4"></i> Agregar Área
+            </button>
+        </form>
+        {% else %}
+        <p class="text-xs text-slate-500">
+            Todas las áreas disponibles ya están incluidas.
+            <a href="{% url 'stock:category_create' %}" class="text-emerald-600 font-semibold hover:underline">Crear nueva área</a>.
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

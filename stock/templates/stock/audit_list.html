@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Tomas de Inventario a la Fecha | Restaurante{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <i data-lucide="clipboard-check" class="w-7 h-7 text-emerald-600"></i>
+                Registros de Inventario a la Fecha
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">
+                Auditorías físicas, conteos de existencias y generación de pedidos de reposición.
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'stock:stock_audit_create' %}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-700/20 transition">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i> Iniciar Nueva Toma de Inventario
+            </a>
+        </div>
+    </div>
+
+    <!-- Audits List -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {% if audits %}
+        <div class="divide-y divide-slate-100">
+            {% for audit in audits %}
+            <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/70 transition">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2.5">
+                        <span class="font-bold text-base text-slate-900">{{ audit.title }}</span>
+                        {% if audit.status == 'completed' %}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Finalizado y Aplicado
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> En Proceso (Borrador)
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="text-xs text-slate-500 flex flex-wrap items-center gap-4 pt-1">
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i>
+                            Fecha: <strong class="text-slate-700 font-semibold">{{ audit.audit_date|date:"d/m/Y" }}</strong>
+                        </span>
+                        {% if audit.responsible %}
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="user" class="w-3.5 h-3.5 text-slate-400"></i>
+                            Responsable: <strong class="text-slate-700 font-semibold">{{ audit.responsible }}</strong>
+                        </span>
+                        {% endif %}
+                        {% if audit.category %}
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="tag" class="w-3.5 h-3.5 text-slate-400"></i>
+                            Área: <strong class="text-slate-700 font-semibold">{{ audit.category.name }}</strong>
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Progress metric -->
+                    <div class="flex items-center gap-3 text-xs pt-1">
+                        <div class="flex items-center gap-1 text-slate-600">
+                            <i data-lucide="check-square" class="w-3.5 h-3.5 text-emerald-600"></i>
+                            Contados: <strong>{{ audit.total_counted_products }} / {{ audit.total_products_in_audit }}</strong>
+                        </div>
+                        <span class="text-slate-300">•</span>
+                        <div class="flex items-center gap-1 text-amber-700 font-semibold">
+                            <i data-lucide="shopping-bag" class="w-3.5 h-3.5 text-amber-600"></i>
+                            Productos a pedir: {{ audit.items_to_order_count }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-2 self-start md:self-center">
+                    <a href="{% url 'stock:stock_audit_count' audit.pk %}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl {% if audit.status == 'completed' %}bg-slate-100 hover:bg-slate-200 text-slate-700{% else %}bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm{% endif %} font-bold text-xs transition">
+                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                        {% if audit.status == 'completed' %}Revisar Conteo{% else %}Continuar Conteo{% endif %}
+                    </a>
+                    <a href="{% url 'stock:stock_audit_order_report' audit.pk %}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-emerald-400"></i>
+                        Reporte de Pedidos
+                    </a>
+                    {% if audit.status == 'draft' %}
+                    <a href="{% url 'stock:stock_audit_delete' audit.pk %}" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Eliminar borrador">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-400">
+            <i data-lucide="clipboard-list" class="w-12 h-12 mx-auto text-slate-300 mb-3"></i>
+            <h3 class="text-base font-bold text-slate-700">No hay registros de inventario</h3>
+            <p class="text-sm mt-1">Inicia tu primera toma para contabilizar los stocks a la fecha y generar pedidos.</p>
+            <a href="{% url 'stock:stock_audit_create' %}" class="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-md transition">
+                <i data-lucide="plus" class="w-4 h-4"></i> Iniciar Primera Toma de Inventario
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

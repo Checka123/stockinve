@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Reporte de Solicitud de Pedidos | {{ audit.title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    @media print {
+        @page {
+            margin: 1.5cm;
+            size: portrait;
+        }
+        body {
+            background: white !important;
+            font-size: 11pt;
+        }
+        .print-shadow-none {
+            box-shadow: none !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+        .break-inside-avoid {
+            break-inside: avoid;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-5xl mx-auto">
+
+    <!-- Action Toolbar (Hidden on Print) -->
+    <div class="no-print bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+            <nav class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+                <span>/</span>
+                <a href="{% url 'stock:stock_audit_list' %}" class="hover:text-slate-900">Tomas de Inventario</a>
+                <span>/</span>
+                <a href="{% url 'stock:stock_audit_count' audit.pk %}" class="hover:text-slate-900">{{ audit.title }}</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Reporte de Solicitud</span>
+            </nav>
+            <h1 class="text-lg font-bold text-slate-900">Reporte de Solicitud de Productos</h1>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Volver al conteo -->
+            <a href="{% url 'stock:stock_audit_count' audit.pk %}" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition inline-flex items-center gap-1.5">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Editar Conteo
+            </a>
+
+            <!-- Export CSV -->
+            <a href="{% url 'stock:stock_audit_export_csv' audit.pk %}" class="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition inline-flex items-center gap-1.5">
+                <i data-lucide="download" class="w-4 h-4 text-emerald-600"></i> Exportar CSV
+            </a>
+
+            <!-- Print / PDF -->
+            <button onclick="window.print()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition inline-flex items-center gap-1.5 shadow-sm">
+                <i data-lucide="printer" class="w-4 h-4 text-emerald-400"></i> Imprimir / PDF
+            </button>
+
+            <!-- Formal Purchase Order Creation -->
+            <form method="POST" action="{% url 'stock:create_orders_from_audit' audit.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition inline-flex items-center gap-1.5 shadow-md shadow-emerald-700/20">
+                    <i data-lucide="shopping-cart" class="w-4 h-4"></i> Crear Pedidos Formales
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Official Report Document Paper Sheet -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 sm:p-8 space-y-6 print-shadow-none">
+
+        <!-- Restaurant & Report Header -->
+        <div class="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold">
+                        <i data-lucide="utensils" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">SOLICITUD DE COMPRA & REPOSICIÓN</h2>
+                        <p class="text-xs text-slate-500">StockGourmet — Sistema de Control de Inventario</p>
+                    </div>
+                </div>
+                <div class="mt-4 text-xs text-slate-600 space-y-1">
+                    <p><strong class="text-slate-800">Toma de Inventario:</strong> {{ audit.title }}</p>
+                    <p><strong class="text-slate-800">Fecha del Conteo:</strong> {{ audit.audit_date|date:"d/m/Y" }}</p>
+                    {% if audit.responsible %}
+                    <p><strong class="text-slate-800">Responsable:</strong> {{ audit.responsible }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Total Cost & Item Summary Badge -->
+            <div class="sm:text-right bg-slate-50 sm:bg-transparent p-4 sm:p-0 rounded-xl border sm:border-0 border-slate-100">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total de Insumos a Pedir</span>
+                <span class="text-3xl font-black text-emerald-700">{{ total_order_items }} artículos</span>
+                <span class="text-xs text-slate-500 block mt-1">Presupuesto Estimado: <strong class="text-slate-900 font-bold">Q{{ total_order_cost|floatformat:"2u" }}</strong></span>
+            </div>
+        </div>
+
+        {% if order_items %}
+
+        <!-- Grouped by Supplier -->
+        <div class="space-y-8">
+            {% for group in suppliers_groups %}
+            <div class="break-inside-avoid border border-slate-200 rounded-xl overflow-hidden">
+                <!-- Supplier Subheader -->
+                <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="truck" class="w-4 h-4 text-emerald-600"></i>
+                            <h3 class="font-bold text-sm text-slate-900">
+                                {% if group.supplier %}{{ group.supplier.name }}{% else %}Compras Generales / Sin Proveedor Asignado{% endif %}
+                            </h3>
+                        </div>
+                        {% if group.supplier %}
+                        <div class="text-[11px] text-slate-500 flex items-center gap-3 mt-0.5">
+                            {% if group.supplier.contact_name %}<span>Contacto: {{ group.supplier.contact_name }}</span>{% endif %}
+                            {% if group.supplier.phone %}<span>Tel / WhatsApp: {{ group.supplier.phone }}</span>{% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- WhatsApp Quick Share Button (Hidden on Print) -->
+                    {% if group.supplier.phone %}
+                    <div class="no-print flex items-center gap-2">
+                        <button type="button" 
+                                onclick="copyWhatsappText('supp-{{ forloop.counter }}')"
+                                class="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 border border-emerald-200">
+                            <i data-lucide="copy" class="w-3.5 h-3.5 text-emerald-600"></i> Copiar para WhatsApp
+                        </button>
+                        <a href="https://wa.me/{{ group.supplier.phone|cut:' '|cut:'+'|cut:'-' }}?text={{ group.items|length }}%20productos%20pedidos" 
+                           target="_blank"
+                           class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i> Abrir WhatsApp
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Hidden Text Container for WhatsApp Copy -->
+                <textarea id="supp-{{ forloop.counter }}" class="hidden">📋 *SOLICITUD DE PEDIDO*
+Restaurante: StockGourmet
+Fecha: {{ audit.audit_date|date:"d/m/Y" }}
+Proveedor: {% if group.supplier %}{{ group.supplier.name }}{% else %}General{% endif %}
+
+*PRODUCTOS SOLICITADOS:*
+{% for item in group.items %}• *{{ item.final_order }} {{ item.product.get_unit_display }}* — {{ item.product.name }}{% if item.notes %} (Nota: {{ item.notes }}){% endif %}
+{% endfor %}
+Total productos: {{ group.items|length }}</textarea>
+
+                <!-- Items Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="bg-white text-[11px] uppercase font-bold text-slate-400 border-b border-slate-200">
+                            <tr>
+                                <th class="px-5 py-2.5">Producto / Insumo</th>
+                                <th class="px-4 py-2.5 text-right bg-emerald-50/50 text-emerald-900 font-extrabold">CANTIDAD A PEDIR</th>
+                                <th class="px-4 py-2.5 text-right">Stock Contado</th>
+                                <th class="px-4 py-2.5 text-right">Stock Mínimo</th>
+                                <th class="px-4 py-2.5 text-right">Costo Unit.</th>
+                                <th class="px-4 py-2.5 text-right">Subtotal</th>
+                                <th class="px-4 py-2.5">Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for item in group.items %}
+                            <tr class="hover:bg-slate-50/50">
+                                <td class="px-5 py-3 font-bold text-slate-900">
+                                    {{ item.product.name }}
+                                    {% if item.product.sku %}
+                                    <span class="font-mono text-[10px] text-slate-400 block font-normal">{{ item.product.sku }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right font-black text-sm text-emerald-700 bg-emerald-50/30">
+                                    {{ item.final_order }} <span class="text-xs font-semibold text-emerald-900">{{ item.product.get_unit_display }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-right text-slate-600">
+                                    {% if item.counted_stock is not None %}{{ item.counted_stock }}{% else %}—{% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right text-slate-500">
+                                    {{ item.min_stock }}
+                                </td>
+                                <td class="px-4 py-3 text-right text-slate-600">
+                                    Q{{ item.product.cost_price|default_if_none:"0.00"|floatformat:"2u" }}
+                                </td>
+                                <td class="px-4 py-3 text-right font-bold text-slate-900">
+                                    Q{{ item.subtotal_cost|floatformat:"2u" }}
+                                </td>
+                                <td class="px-4 py-3 text-slate-500 italic">
+                                    {{ item.notes|default:"-" }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="bg-slate-50/80 font-bold border-t border-slate-200 text-slate-900">
+                            <tr>
+                                <td class="px-5 py-2.5" colspan="5">Subtotal Proveedor</td>
+                                <td class="px-4 py-2.5 text-right font-black text-emerald-700">Q{{ group.total_cost|floatformat:"2u" }}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Receipt / Signatures (Print Only) -->
+        <div class="print-only hidden pt-12">
+            <div class="grid grid-cols-2 gap-12 text-center text-xs text-slate-600">
+                <div class="border-t border-slate-400 pt-2">
+                    <p class="font-bold text-slate-900">Chef Ejecutivo / Encargado</p>
+                    <p>Firma y Autorización de Compra</p>
+                </div>
+                <div class="border-t border-slate-400 pt-2">
+                    <p class="font-bold text-slate-900">Administración / Compras</p>
+                    <p>Revisión y Aprobación</p>
+                </div>
+            </div>
+        </div>
+
+        {% else %}
+        <div class="p-12 text-center text-slate-400">
+            <i data-lucide="check-circle" class="w-12 h-12 mx-auto text-emerald-500 mb-2"></i>
+            <h3 class="text-base font-bold text-slate-700">No se requieren compras</h3>
+            <p class="text-xs mt-1">Todos los productos contados tienen stock suficiente por encima de sus cantidades mínimas.</p>
+            <a href="{% url 'stock:stock_audit_count' audit.pk %}" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition">
+                <i data-lucide="edit" class="w-3.5 h-3.5"></i> Revisar o Ajustar Cantidades a Pedir
+            </a>
+        </div>
+        {% endif %}
+
+    </div>
+
+</div>
+
+<!-- Toast notification for copy to clipboard -->
+<div id="copyToast" class="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold hidden z-50 flex items-center gap-2">
+    <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+    <span>¡Copiado al portapapeles listo para enviar por WhatsApp!</span>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function copyWhatsappText(id) {
+        const text = document.getElementById(id).value;
+        navigator.clipboard.writeText(text).then(() => {
+            const toast = document.getElementById('copyToast');
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        });
+    }
+</script>
+{% endblock %}

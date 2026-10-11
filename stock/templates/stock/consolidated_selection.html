@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Selección para Consolidado Diario | Inventario Restaurante{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-5xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <nav class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Consolidado Diario</span>
+            </nav>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <i data-lucide="layers" class="w-7 h-7 text-amber-500"></i>
+                Consolidación de Conteos por Ubicaciones
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">
+                Selecciona las tomas de diferentes áreas (ej. Bodega, Barra, Cocina) para unificar las existencias del mismo producto y calcular el faltante total para compra.
+            </p>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+        <form method="GET" class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Filtrar por Fecha</label>
+                <input type="date" name="date" value="{{ date_filter }}" class="form-input text-xs py-1.5 px-3">
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Buscar</label>
+                <input type="text" name="q" value="{{ query }}" placeholder="Área, título, responsable..." class="form-input text-xs py-1.5 px-3">
+            </div>
+            <div class="pt-4 flex items-center gap-2">
+                <button type="submit" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition">
+                    Filtrar
+                </button>
+                <a href="{% url 'stock:consolidated_selection' %}?date={{ today_str }}" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition">
+                    Ver Conteos de Hoy
+                </a>
+                {% if date_filter or query %}
+                <a href="{% url 'stock:consolidated_selection' %}" class="px-2.5 py-1.5 text-slate-500 hover:underline text-xs">
+                    Limpiar
+                </a>
+                {% endif %}
+            </div>
+        </form>
+
+        <div class="flex items-center gap-2 self-end sm:self-center">
+            <button type="button" onclick="selectAllCheckboxes(true)" class="text-xs text-emerald-600 hover:underline font-semibold">
+                Seleccionar todos
+            </button>
+            <span class="text-slate-300">•</span>
+            <button type="button" onclick="selectAllCheckboxes(false)" class="text-xs text-slate-500 hover:underline">
+                Desmarcar
+            </button>
+        </div>
+    </div>
+
+    <!-- Form for Selection -->
+    <form method="POST" action="{% url 'stock:consolidated_report_view' %}" id="consolidateForm" class="space-y-4">
+        {% csrf_token %}
+
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            {% if audits %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs sm:text-sm text-slate-700">
+                    <thead class="bg-slate-50 uppercase text-[11px] font-bold text-slate-400 border-b border-slate-200">
+                        <tr>
+                            <th class="px-4 py-3 text-center w-12">
+                                <input type="checkbox" id="masterCheckbox" onclick="toggleAll(this)" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
+                            </th>
+                            <th class="px-4 py-3">Fecha</th>
+                            <th class="px-4 py-3">Título de la Toma</th>
+                            <th class="px-4 py-3">Ubicación / Área</th>
+                            <th class="px-4 py-3">Responsable</th>
+                            <th class="px-4 py-3 text-center">Estado</th>
+                            <th class="px-4 py-3 text-right">Productos Contados</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for audit in audits %}
+                        <tr class="hover:bg-slate-50/70 transition">
+                            <td class="px-4 py-3.5 text-center">
+                                <input type="checkbox" name="audit_ids" value="{{ audit.id }}" class="audit-checkbox w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" onchange="checkSelectionCount()">
+                            </td>
+                            <td class="px-4 py-3.5 font-mono text-slate-500 text-xs">
+                                {{ audit.audit_date|date:"d/m/Y" }}
+                            </td>
+                            <td class="px-4 py-3.5 font-bold text-slate-900">
+                                <a href="{% url 'stock:stock_audit_count' audit.pk %}" class="hover:text-emerald-600 hover:underline">
+                                    {{ audit.title }}
+                                </a>
+                            </td>
+                            <td class="px-4 py-3.5 font-semibold text-slate-700">
+                                {% if audit.location_area %}
+                                <span class="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md text-xs">
+                                    📍 {{ audit.location_area }}
+                                </span>
+                                {% else %}
+                                <span class="text-slate-400 italic">General</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3.5 text-slate-600">
+                                {{ audit.responsible|default:"—" }}
+                            </td>
+                            <td class="px-4 py-3.5 text-center">
+                                {% if audit.status == 'completed' %}
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">Finalizado</span>
+                                {% else %}
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">En Conteo</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3.5 text-right font-black text-slate-900">
+                                {{ audit.total_counted_products }} / {{ audit.total_products_in_audit }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-12 text-center text-slate-400">
+                <i data-lucide="clipboard" class="w-12 h-12 mx-auto text-slate-300 mb-2"></i>
+                <h3 class="text-base font-bold text-slate-700">No hay registros de inventario</h3>
+                <p class="text-xs mt-1">Crea tomas de inventario para Bodega, Barra y Cocina para poder consolidarlas.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Submit Footer Bar -->
+        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-xl flex items-center justify-between">
+            <div class="text-xs">
+                <span>Registros seleccionados para consolidar: </span>
+                <strong class="text-amber-400 text-base" id="selectedCountText">0</strong>
+            </div>
+
+            <button type="submit" id="submitBtn" disabled class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black text-xs sm:text-sm transition flex items-center gap-2 shadow-lg">
+                <i data-lucide="layers" class="w-4 h-4 text-slate-950"></i>
+                Generar Reporte Consolidado Final
+            </button>
+        </div>
+    </form>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleAll(master) {
+        document.querySelectorAll('.audit-checkbox').forEach(cb => {
+            cb.checked = master.checked;
+        });
+        checkSelectionCount();
+    }
+
+    function selectAllCheckboxes(status) {
+        document.querySelectorAll('.audit-checkbox').forEach(cb => {
+            cb.checked = status;
+        });
+        const master = document.getElementById('masterCheckbox');
+        if (master) master.checked = status;
+        checkSelectionCount();
+    }
+
+    function checkSelectionCount() {
+        const checked = document.querySelectorAll('.audit-checkbox:checked').length;
+        document.getElementById('selectedCountText').textContent = checked;
+        const btn = document.getElementById('submitBtn');
+        if (btn) {
+            btn.disabled = checked === 0;
+        }
+    }
+
+    // Auto-select all on load if filtering by a single date
+    {% if date_filter %}
+    selectAllCheckboxes(true);
+    {% endif %}
+</script>
+{% endblock %}
