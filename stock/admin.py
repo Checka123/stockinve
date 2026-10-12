@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Category, Supplier, Product, StockAudit, StockAuditItem, StockCountSession, PurchaseOrder, PurchaseOrderItem, StockMovement
+from .models import (
+    Category, Supplier, Product, StockAudit, StockAuditItem, StockCountSession,
+    PurchaseOrder, PurchaseOrderItem, StockMovement, AppSettings,
+)
 
 
 @admin.register(Category)
@@ -72,3 +75,8 @@ class StockMovementAdmin(admin.ModelAdmin):
     list_display = ('created_at', 'product', 'movement_type', 'quantity', 'previous_stock', 'new_stock', 'reference')
     list_filter = ('movement_type', 'created_at')
     search_fields = ('product__name', 'reference')
+
+
+@admin.register(AppSettings)
+class AppSettingsAdmin(admin.ModelAdmin):
+    list_display = ('hide_previous_field', 'hide_minimum_field')

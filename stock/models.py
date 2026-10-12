@@ -189,6 +189,9 @@ class StockCountSession(models.Model):
 
     @property
     def audit_ids_csv(self):
+        cached = getattr(self, '_prefetched_objects_cache', {}).get('audits')
+        if cached is not None:
+            return ",".join(str(audit.id) for audit in cached)
         return ",".join(str(audit_id) for audit_id in self.audits.values_list('id', flat=True))
 
     def apply_consolidated_to_inventory(self):
@@ -452,3 +455,34 @@ class StockMovement(models.Model):
 
     def __str__(self):
         return f"{self.get_movement_type_display()} - {self.product.name} ({self.quantity:+})"
+
+
+class AppSettings(models.Model):
+    """Una sola fila con las opciones generales de la aplicación."""
+    hide_previous_field = models.BooleanField(
+        default=False,
+        verbose_name="Ocultar el campo Previo",
+    )
+    hide_minimum_field = models.BooleanField(
+        default=False,
+        verbose_name="Ocultar el campo Mínimo",
+    )
+
+    class Meta:
+        verbose_name = "Configuración general"
+        verbose_name_plural = "Configuración general"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        return
+
+    @classmethod
+    def load(cls):
+        settings_row, _created = cls.objects.get_or_create(pk=1)
+        return settings_row
+
+    def __str__(self):
+        return "Configuración general"

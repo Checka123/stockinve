@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración | Inventario Restaurante{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto space-y-4">
+    <nav class="flex items-center gap-1.5 text-xs text-slate-500">
+        <a href="{% url 'stock:dashboard' %}" class="hover:text-slate-900">Dashboard</a>
+        <span>/</span>
+        <span class="text-slate-800 font-medium">Configuración</span>
+    </nav>
+
+    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div class="p-5 border-b border-slate-100">
+            <h1 class="text-lg font-semibold text-slate-900">Configuración general</h1>
+            <p class="text-sm text-slate-500 mt-1">Estas opciones cambian la pantalla de conteo para todos.</p>
+        </div>
+
+        <form method="POST" class="p-5 space-y-3">
+            {% csrf_token %}
+
+            <label class="flex items-start gap-3 p-3 rounded-lg border border-slate-200 cursor-pointer">
+                {{ form.hide_previous_field }}
+                <span>
+                    <span class="block text-sm font-medium text-slate-900">Ocultar el campo Previo</span>
+                    <span class="block text-xs text-slate-500 mt-0.5">No se muestra el stock que había antes de contar.</span>
+                </span>
+            </label>
+
+            <label class="flex items-start gap-3 p-3 rounded-lg border border-slate-200 cursor-pointer">
+                {{ form.hide_minimum_field }}
+                <span>
+                    <span class="block text-sm font-medium text-slate-900">Ocultar el campo Mínimo</span>
+                    <span class="block text-xs text-slate-500 mt-0.5">Tampoco se calcula la cantidad a pedir. El pedido se escribe a mano.</span>
+                </span>
+            </label>
+
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition">
+                    <i data-lucide="check" class="w-4 h-4"></i> Guardar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

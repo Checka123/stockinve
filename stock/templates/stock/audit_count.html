@@ -110,12 +110,26 @@
         }
         .save-item-btn .save-word,
         .save-item-btn.is-saved .saved-word { display: none; }
+        .count-grid.hide-min:not(.hide-prev),
+        .count-grid.hide-prev:not(.hide-min) {
+            grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.25fr) minmax(0, 1.25fr) auto;
+        }
+        .count-grid.is-locked.hide-min:not(.hide-prev),
+        .count-grid.is-locked.hide-prev:not(.hide-min) {
+            grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) minmax(0, 1.2fr);
+        }
+        .count-grid.hide-min.hide-prev {
+            grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.25fr) auto;
+        }
+        .count-grid.is-locked.hide-min.hide-prev {
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr);
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<form method="POST" id="auditCountForm" class="space-y-4 pb-28">
+<form method="POST" id="auditCountForm" class="space-y-4 pb-28" data-calculate-order="{% if app_settings.hide_minimum_field %}0{% else %}1{% endif %}">
 
     {% csrf_token %}
 
@@ -236,15 +250,27 @@
                 </div>
             </div>
 
-            <div class="count-grid {% if audit.status == 'completed' %}is-locked{% endif %}">
+            {% if item.other_area_counts %}
+            <div class="mt-2 flex flex-wrap gap-1.5">
+                {% for other in item.other_area_counts %}
+                <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-800">El área "{{ other.area }}" ha contado: {{ other.counted }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="count-grid {% if audit.status == 'completed' %}is-locked{% endif %}{% if app_settings.hide_minimum_field %} hide-min{% endif %}{% if app_settings.hide_previous_field %} hide-prev{% endif %}">
+                {% if not app_settings.hide_minimum_field %}
                 <div class="min-w-0">
                     <span class="count-label">Mínimo</span>
                     <div class="count-readonly">{% if item.product.min_stock %}{{ item.product.min_stock }}{% else %}Sin mínimo{% endif %}</div>
                 </div>
+                {% endif %}
+                {% if not app_settings.hide_previous_field %}
                 <div class="min-w-0">
                     <span class="count-label">Previo</span>
                     <div class="count-readonly">{{ item.previous_stock }}</div>
                 </div>
+                {% endif %}
                 <div class="min-w-0">
                     <label class="count-label" for="counted_{{ item.id }}">Cantidad a contar</label>
                     <input type="number"
@@ -264,7 +290,9 @@
                 <div class="min-w-0">
                     <div class="field-head flex items-baseline justify-between gap-2">
                         <label class="count-label mb-0" for="order_{{ item.id }}">Cantidad a pedir</label>
+                        {% if not app_settings.hide_minimum_field %}
                         <span class="text-[11px] text-slate-400 mb-1 shrink-0">Sugerido <strong id="sugg-display-{{ item.id }}" class="text-slate-600 font-medium">{{ item.suggested_order }}</strong></span>
+                        {% endif %}
                     </div>
                     <input type="number"
                            step="0.01"
@@ -497,7 +525,8 @@
             const orderInput = document.getElementById(`order_${itemId}`);
             const suggDisplay = document.getElementById(`sugg-display-${itemId}`);
 
-            if (this.value.trim() !== '') {
+            const calculateOrder = document.getElementById('auditCountForm')?.getAttribute('data-calculate-order') !== '0';
+            if (this.value.trim() !== '' && calculateOrder) {
                 const countedVal = parseFloat(this.value) || 0;
                 const target = idealStock > 0 ? idealStock : minStock;
                 const suggested = Math.max(0, target - countedVal);

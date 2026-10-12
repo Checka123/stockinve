@@ -1,5 +1,8 @@
 from django import forms
-from .models import Product, StockAudit, StockAuditItem, StockCountSession, Supplier, Category, PurchaseOrder, StockMovement
+from .models import (
+    Product, StockAudit, StockAuditItem, StockCountSession, Supplier, Category,
+    PurchaseOrder, StockMovement, AppSettings,
+)
 
 
 class ProductForm(forms.ModelForm):
@@ -151,3 +154,17 @@ class QuickAdjustmentForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Motivo: Ej. Caducidad, Producto dañado, Donación'}),
         label="Referencia / Motivo"
     )
+
+
+class AppSettingsForm(forms.ModelForm):
+    class Meta:
+        model = AppSettings
+        fields = ['hide_previous_field', 'hide_minimum_field']
+        widgets = {
+            'hide_previous_field': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-200',
+            }),
+            'hide_minimum_field': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-200',
+            }),
+        }

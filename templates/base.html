@@ -159,6 +159,9 @@
                             <a href="{% url 'stock:quick_order_report' %}" class="flex items-center gap-2 px-3 py-2 hover:bg-slate-100 text-xs rounded-md mx-1">
                                 <i data-lucide="alert-triangle" class="w-4 h-4 text-slate-500"></i> Pedido Rápido Express
                             </a>
+                            <a href="{% url 'stock:app_settings' %}" class="flex items-center gap-2 px-3 py-2 hover:bg-slate-100 text-xs rounded-md mx-1">
+                                <i data-lucide="settings" class="w-4 h-4 text-slate-500"></i> Configuración
+                            </a>
                         </div>
                     </div>
                 </nav>
@@ -208,6 +211,7 @@
             <a href="{% url 'stock:supplier_list' %}" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 text-sm"><i data-lucide="truck" class="w-4 h-4 text-slate-400"></i> Proveedores</a>
             <a href="{% url 'stock:category_list' %}" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 text-sm"><i data-lucide="tags" class="w-4 h-4 text-slate-400"></i> Áreas / Categorías</a>
             <a href="{% url 'stock:movement_list' %}" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 text-sm"><i data-lucide="history" class="w-4 h-4 text-slate-400"></i> Historial / Kardex</a>
+            <a href="{% url 'stock:app_settings' %}" class="flex items-center gap-2 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-100 text-sm"><i data-lucide="settings" class="w-4 h-4 text-slate-400"></i> Configuración</a>
             {% if user.is_authenticated %}
             <div class="pt-2 mt-1 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 px-1">
                 <span>Usuario: <strong class="text-slate-700">{{ user.username }}</strong></span>

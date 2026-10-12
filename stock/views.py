@@ -1,5 +1,7 @@
 import csv
 from decimal import Decimal
+from django.core.paginator import Paginator
+from django.db.models import prefetch_related_objects
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
@@ -9,9 +11,12 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from .models import (
     Product, Category, Supplier, StockAudit, StockAuditItem, StockCountSession,
-    PurchaseOrder, PurchaseOrderItem, StockMovement
+    PurchaseOrder, PurchaseOrderItem, StockMovement, AppSettings
 )
-from .forms import ProductForm, StockAuditForm, StockCountSessionForm, SupplierForm, CategoryForm, QuickAdjustmentForm
+from .forms import (
+    ProductForm, StockAuditForm, StockCountSessionForm, SupplierForm, CategoryForm,
+    QuickAdjustmentForm, AppSettingsForm,
+)
 from .importer import import_products_from_workbook
 
 
@@ -74,8 +79,41 @@ def _sync_area_items(audit, area):
     return len(items_to_create)
 
 
-def _apply_item_capture(item, counted_raw, order_raw, notes_raw, is_checked=False):
+def _orders_are_calculated():
+    """El pedido se calcula solo cuando el campo Mínimo está visible."""
+    return not AppSettings.load().hide_minimum_field
+
+
+def _other_area_counts(audit, product_ids):
+    """Conteos ya hechos del mismo producto en otras áreas de este conteo general."""
+    if not audit.session_id or not product_ids:
+        return {}
+    rows = (
+        StockAuditItem.objects.filter(
+            audit__session_id=audit.session_id,
+            product_id__in=product_ids,
+            counted_stock__isnull=False,
+        )
+        .exclude(audit_id=audit.id)
+        .select_related('audit', 'audit__category')
+        .order_by('audit__location_area', 'audit_id')
+    )
+    grouped = {}
+    for row in rows:
+        area_name = row.audit.location_area or (
+            row.audit.category.name if row.audit.category_id else row.audit.title
+        )
+        grouped.setdefault(row.product_id, []).append({
+            'area': area_name,
+            'counted': row.counted_stock,
+        })
+    return grouped
+
+
+def _apply_item_capture(item, counted_raw, order_raw, notes_raw, is_checked=False, calculate_order=None):
     """Guarda el conteo, el pedido y las notas de un producto."""
+    if calculate_order is None:
+        calculate_order = _orders_are_calculated()
     target = item.ideal_stock if item.ideal_stock > 0 else item.min_stock
     counted_val = '' if counted_raw is None else str(counted_raw).strip().replace(',', '.')
     order_val = '' if order_raw is None else str(order_raw).strip().replace(',', '.')
@@ -93,13 +131,21 @@ def _apply_item_capture(item, counted_raw, order_raw, notes_raw, is_checked=Fals
             item.counted_stock = max(Decimal('0.00'), Decimal(counted_val))
         except Exception:
             item.counted_stock = Decimal('0.00')
-        suggested = max(Decimal('0.00'), target - item.counted_stock)
-        item.suggested_order = suggested
-        item.final_order = parsed_order if parsed_order is not None else suggested
+        if calculate_order:
+            suggested = max(Decimal('0.00'), target - item.counted_stock)
+            item.suggested_order = suggested
+            item.final_order = parsed_order if parsed_order is not None else suggested
+        else:
+            item.suggested_order = Decimal('0.00')
+            item.final_order = parsed_order if parsed_order is not None else Decimal('0.00')
     elif is_checked:
         item.counted_stock = Decimal('0.00')
-        item.suggested_order = max(Decimal('0.00'), target)
-        item.final_order = parsed_order if parsed_order is not None else item.suggested_order
+        if calculate_order:
+            item.suggested_order = max(Decimal('0.00'), target)
+            item.final_order = parsed_order if parsed_order is not None else item.suggested_order
+        else:
+            item.suggested_order = Decimal('0.00')
+            item.final_order = parsed_order if parsed_order is not None else Decimal('0.00')
     else:
         item.counted_stock = None
         item.suggested_order = Decimal('0.00')
@@ -130,6 +176,21 @@ def _item_capture_payload(item):
 
 
 @login_required
+def app_settings(request):
+    """Opciones generales: qué campos se ven al contar y si el pedido se calcula."""
+    settings_row = AppSettings.load()
+    if request.method == 'POST':
+        form = AppSettingsForm(request.POST, instance=settings_row)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Configuración guardada.')
+            return redirect('stock:app_settings')
+    else:
+        form = AppSettingsForm(instance=settings_row)
+    return render(request, 'stock/app_settings.html', {'form': form, 'title': 'Configuración'})
+
+
+@login_required
 def dashboard(request):
     """Vista principal con métricas clave para el restaurante."""
     active_products = Product.objects.filter(is_active=True).select_related(
@@ -147,8 +208,15 @@ def dashboard(request):
         for p in active_products
     )
     
-    # Conteos de stock recientes (sesiones multi-área)
-    recent_sessions = StockCountSession.objects.all()[:5]
+    # Conteos de stock: una página, con el total de áreas en la misma consulta.
+    sessions = StockCountSession.objects.annotate(
+        area_total=Count('audits', distinct=True),
+        area_done=Count('audits', filter=Q(audits__status='completed'), distinct=True),
+    ).order_by('-count_date', '-created_at')
+    session_page = Paginator(sessions, 8).get_page(request.GET.get('conteos'))
+    session_rows = list(session_page.object_list)
+    prefetch_related_objects(session_rows, 'audits')
+    session_page.object_list = session_rows
     # Tomas de inventario recientes
     recent_audits = StockAudit.objects.select_related('category')[:5]
     
@@ -164,7 +232,7 @@ def dashboard(request):
         'out_of_stock_count': len(out_of_stock_products),
         'total_inventory_value': total_inventory_value,
         'low_stock_products': low_stock_products[:8],  # Mostrar los primeros 8 críticos
-        'recent_sessions': recent_sessions,
+        'session_page': session_page,
         'recent_audits': recent_audits,
         'recent_orders': recent_orders,
         'categories': categories,
@@ -431,6 +499,11 @@ def stock_audit_count(request, pk):
             messages.success(request, 'Progreso del inventario guardado correctamente en borrador.')
             return redirect('stock:stock_audit_count', pk=audit.pk)
 
+    items = list(items)
+    other_counts = _other_area_counts(audit, [item.product_id for item in items])
+    for item in items:
+        item.other_area_counts = other_counts.get(item.product_id, [])
+
     # Categorías presentes en la toma
     categories_present = set()
     for item in items:
@@ -443,6 +516,7 @@ def stock_audit_count(request, pk):
         'audit': audit,
         'items': items,
         'categories_present': sorted(list(categories_present)),
+        'app_settings': AppSettings.load(),
     }
     return render(request, 'stock/audit_count.html', context)
 

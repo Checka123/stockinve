@@ -62,4 +62,7 @@ urlpatterns = [
 
     # Movimientos / Kardex
     path('movimientos/', views.movement_list, name='movement_list'),
+
+    # Configuración general
+    path('configuracion/', views.app_settings, name='app_settings'),
 ]

@@ -5,7 +5,10 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from stock.forms import ProductForm
 from stock.importer import import_products_from_rows, read_rows_from_workbook
-from stock.models import Category, Supplier, Product, StockAudit, StockAuditItem, StockCountSession, PurchaseOrder, StockMovement
+from stock.models import (
+    Category, Supplier, Product, StockAudit, StockAuditItem, StockCountSession,
+    PurchaseOrder, StockMovement, AppSettings,
+)
 
 User = get_user_model()
 
@@ -113,6 +116,24 @@ class RestaurantInventoryTests(TestCase):
         self.assertEqual(self.client.get(reverse('stock:dashboard')).status_code, 200)
         self.assertEqual(self.client.get(reverse('stock:product_list')).status_code, 200)
         self.assertEqual(self.client.get(reverse('stock:product_detail', kwargs={'pk': product.pk})).status_code, 200)
+
+    def test_dashboard_puts_count_sessions_before_critical_stock_and_paginates(self):
+        for index in range(9):
+            StockCountSession.objects.create(
+                title=f'Registro {index}', count_date=timezone.now().date(),
+            )
+
+        page = self.client.get(reverse('stock:dashboard'))
+        body = page.content.decode()
+        self.assertLess(body.index('Conteos de Stock Recientes'), body.index('Insumos Críticos'))
+        self.assertContains(page, 'Registro 8')
+        self.assertNotContains(page, 'Registro 0')
+        self.assertContains(page, 'Siguiente')
+
+        page_two = self.client.get(reverse('stock:dashboard') + '?conteos=2')
+        self.assertContains(page_two, 'Registro 0')
+        self.assertNotContains(page_two, 'Registro 8')
+        self.assertContains(page_two, 'Anterior')
 
     def test_product_cost_is_displayed_in_quetzales(self):
         response = self.client.get(reverse('stock:product_list'))
@@ -699,3 +720,83 @@ class RestaurantInventoryTests(TestCase):
         comma_sheet = load_workbook(BytesIO(comma_file.content)).active
         self.assertEqual(comma_sheet.cell(3, 6).number_format, '"0,50"')
         self.assertEqual(comma_sheet.cell(3, 6).value, Decimal('0.50'))
+
+    def test_settings_hide_previous_and_minimum_and_skip_order(self):
+        AppSettings.objects.create(pk=1, hide_previous_field=True, hide_minimum_field=True)
+        audit = StockAudit.objects.create(
+            title='Conteo sin mínimo', audit_date=timezone.now().date(), status='draft',
+        )
+        item = StockAuditItem.objects.create(
+            audit=audit, product=self.product1,
+            previous_stock=Decimal('5.00'), min_stock=Decimal('10.00'), ideal_stock=Decimal('15.00'),
+        )
+
+        page = self.client.get(reverse('stock:stock_audit_count', kwargs={'pk': audit.pk}))
+        self.assertContains(page, 'data-calculate-order="0"')
+        self.assertNotContains(page, 'count-label">Mínimo')
+        self.assertNotContains(page, 'count-label">Previo')
+        self.assertNotContains(page, 'Sugerido')
+
+        saved = self.client.post(
+            reverse('stock:stock_audit_item_save', kwargs={'pk': audit.pk, 'item_pk': item.pk}),
+            {'counted': '4', 'order': '', 'notes': ''},
+        )
+        self.assertEqual(saved.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.counted_stock, Decimal('4.00'))
+        self.assertEqual(item.suggested_order, Decimal('0.00'))
+        self.assertEqual(item.final_order, Decimal('0.00'))
+
+        typed = self.client.post(
+            reverse('stock:stock_audit_item_save', kwargs={'pk': audit.pk, 'item_pk': item.pk}),
+            {'counted': '4', 'order': '6', 'notes': ''},
+        )
+        self.assertEqual(typed.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.final_order, Decimal('6.00'))
+
+    def test_settings_page_saves_the_two_options(self):
+        response = self.client.post(reverse('stock:app_settings'), {
+            'hide_previous_field': 'on',
+            'hide_minimum_field': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        settings_row = AppSettings.load()
+        self.assertTrue(settings_row.hide_previous_field)
+        self.assertTrue(settings_row.hide_minimum_field)
+
+        cleared = self.client.post(reverse('stock:app_settings'), {})
+        self.assertEqual(cleared.status_code, 302)
+        settings_row.refresh_from_db()
+        self.assertFalse(settings_row.hide_previous_field)
+        self.assertFalse(settings_row.hide_minimum_field)
+
+    def test_count_shows_chip_when_another_area_already_counted(self):
+        session = StockCountSession.objects.create(
+            title='Conteo compartido', count_date=timezone.now().date(),
+        )
+        bodega = StockAudit.objects.create(
+            session=session, location_area='Bodega', title='Bodega',
+            audit_date=session.count_date,
+        )
+        cocina = StockAudit.objects.create(
+            session=session, location_area='Cocina', title='Cocina',
+            audit_date=session.count_date,
+        )
+        StockAuditItem.objects.create(
+            audit=bodega, product=self.product1, counted_stock=Decimal('10.00'),
+        )
+        StockAuditItem.objects.create(
+            audit=cocina, product=self.product1, counted_stock=None,
+        )
+        StockAuditItem.objects.create(
+            audit=bodega, product=self.product2, counted_stock=None,
+        )
+        StockAuditItem.objects.create(
+            audit=cocina, product=self.product2, counted_stock=None,
+        )
+
+        cocina_page = self.client.get(reverse('stock:stock_audit_count', kwargs={'pk': cocina.pk}))
+        self.assertContains(cocina_page, 'El área "Bodega" ha contado:')
+        bodega_page = self.client.get(reverse('stock:stock_audit_count', kwargs={'pk': bodega.pk}))
+        self.assertNotContains(bodega_page, 'El área "Bodega" ha contado:')
