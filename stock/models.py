@@ -1,6 +1,9 @@
-from django.db import models
-from django.utils import timezone
 from decimal import Decimal
+
+from django.db import models
+from django.db.models import F, IntegerField, OuterRef, Subquery
+from django.db.models.functions import Coalesce
+from django.utils import timezone
 
 
 UNIT_CHOICES = [
@@ -134,6 +137,50 @@ class Product(models.Model):
             return {'code': 'regular', 'label': 'Aceptable', 'color': 'blue'}
         else:
             return {'code': 'good', 'label': 'Óptimo', 'color': 'emerald'}
+
+
+class ProductAreaSequence(models.Model):
+    """Orden del producto dentro de un área. No pisa el orden de las demás áreas."""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='area_sequences')
+    area = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='product_sequences')
+    sequence_number = models.PositiveIntegerField(default=10, verbose_name="Orden en el área")
+
+    class Meta:
+        verbose_name = "Orden por área"
+        verbose_name_plural = "Órdenes por área"
+        unique_together = ('product', 'area')
+        ordering = ['sequence_number', 'product__name']
+
+    def __str__(self):
+        return f"{self.area.name}: #{self.sequence_number} {self.product.name}"
+
+
+def order_queryset_by_area(qs, area, product_id_field='product_id', name_field='product__name'):
+    """Ordena por la secuencia del área y, si no hay, por la secuencia general del producto."""
+    if area is None:
+        fallback_name = 'sequence_number' if product_id_field == 'pk' else 'product__sequence_number'
+        return qs.order_by(fallback_name, name_field)
+    area_seq = ProductAreaSequence.objects.filter(
+        product_id=OuterRef(product_id_field),
+        area_id=area.pk,
+    ).values('sequence_number')[:1]
+    fallback = F('sequence_number') if product_id_field == 'pk' else F('product__sequence_number')
+    return qs.annotate(
+        area_sequence=Coalesce(
+            Subquery(area_seq, output_field=IntegerField()),
+            fallback,
+            output_field=IntegerField(),
+        )
+    ).order_by('area_sequence', name_field)
+
+
+def sequences_for_area(area, product_ids):
+    if area is None or not product_ids:
+        return {}
+    return dict(
+        ProductAreaSequence.objects.filter(area=area, product_id__in=product_ids)
+        .values_list('product_id', 'sequence_number')
+    )
 
 
 class StockCountSession(models.Model):

@@ -7,7 +7,7 @@ from stock.forms import ProductForm
 from stock.importer import import_products_from_rows, read_rows_from_workbook
 from stock.models import (
     Category, Supplier, Product, StockAudit, StockAuditItem, StockCountSession,
-    PurchaseOrder, StockMovement, AppSettings,
+    PurchaseOrder, StockMovement, AppSettings, ProductAreaSequence,
 )
 
 User = get_user_model()
@@ -99,6 +99,39 @@ class RestaurantInventoryTests(TestCase):
         self.assertContains(response, 'type="checkbox"')
         self.assertContains(response, 'Carnes &amp; Aves')
         self.assertContains(response, 'Barra')
+        self.assertContains(response, 'Orden por área')
+
+    def test_product_edit_saves_order_for_each_selected_area(self):
+        bodega = Category.objects.create(name='Bodega')
+        cocina = Category.objects.create(name='Cocina')
+        self.product1.location.add(bodega)
+        ProductAreaSequence.objects.create(product=self.product1, area=bodega, sequence_number=4)
+
+        response = self.client.post(
+            reverse('stock:product_edit', kwargs={'pk': self.product1.pk}),
+            {
+                'name': self.product1.name,
+                'sku': self.product1.sku,
+                'sequence_number': self.product1.sequence_number,
+                'group': '',
+                'presentation': '',
+                'location': [bodega.pk, cocina.pk],
+                'supplier': self.supplier.pk,
+                'unit': 'kg',
+                'current_stock': '5.00',
+                'min_stock': '10.00',
+                'ideal_stock': '15.00',
+                'cost_price': '300.00',
+                'detalle_ubicacion': '',
+                'is_active': 'on',
+                f'area_order_{bodega.pk}': '2',
+                f'area_order_{cocina.pk}': '9',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.product1.area_sequences.get(area=bodega).sequence_number, 2)
+        self.assertEqual(self.product1.area_sequences.get(area=cocina).sequence_number, 9)
 
     def test_null_optional_product_fields_do_not_break_pages_or_mark_stock_zero(self):
         product = Product.objects.create(
@@ -430,10 +463,77 @@ class RestaurantInventoryTests(TestCase):
         self.assertEqual(
             set(arroz.location.values_list('name', flat=True)), {'Bodega', 'Cocina'}
         )
+        self.assertEqual(
+            set(arroz.area_sequences.values_list('area__name', 'sequence_number')),
+            {('Bodega', 5), ('Cocina', 5)},
+        )
 
         aceite = Product.objects.get(name='Aceite Vegetal')
         self.assertEqual(aceite.unit, 'unidad')
         self.assertEqual(aceite.location.count(), 0)
+
+    def test_import_keeps_a_separate_order_for_each_area(self):
+        summary = import_products_from_rows([
+            {'name': 'Filete de Res', 'sequence_number': 1, 'location': 'Bodega'},
+            {'name': 'Filete de Res', 'sequence_number': 8, 'location': 'Cocina'},
+        ])
+
+        self.assertEqual(summary['errors'], [])
+        self.product1.refresh_from_db()
+        self.assertEqual(self.product1.sequence_number, 10)
+        self.assertEqual(self.product1.area_sequences.get(area__name='Bodega').sequence_number, 1)
+        self.assertEqual(self.product1.area_sequences.get(area__name='Cocina').sequence_number, 8)
+
+    def test_area_count_and_excel_follow_that_areas_order(self):
+        from io import BytesIO
+        from openpyxl import load_workbook
+
+        bodega = Category.objects.create(name='Bodega')
+        cocina = Category.objects.create(name='Cocina')
+        self.product1.location.add(bodega, cocina)
+        self.product2.location.add(bodega, cocina)
+        ProductAreaSequence.objects.create(product=self.product2, area=bodega, sequence_number=1)
+        ProductAreaSequence.objects.create(product=self.product1, area=bodega, sequence_number=2)
+        ProductAreaSequence.objects.create(product=self.product1, area=cocina, sequence_number=1)
+        ProductAreaSequence.objects.create(product=self.product2, area=cocina, sequence_number=2)
+
+        session = StockCountSession.objects.create(
+            title='Orden por área', count_date=timezone.now().date(),
+        )
+        audit_bodega = StockAudit.objects.create(
+            session=session, category=bodega, location_area='Bodega',
+            title='Bodega', audit_date=session.count_date,
+        )
+        audit_cocina = StockAudit.objects.create(
+            session=session, category=cocina, location_area='Cocina',
+            title='Cocina', audit_date=session.count_date,
+        )
+
+        bodega_page = self.client.get(reverse('stock:stock_audit_count', kwargs={'pk': audit_bodega.pk}))
+        bodega_body = bodega_page.content.decode()
+        self.assertLess(bodega_body.index('Pechuga de Pollo'), bodega_body.index('Filete de Res'))
+
+        cocina_page = self.client.get(reverse('stock:stock_audit_count', kwargs={'pk': audit_cocina.pk}))
+        cocina_body = cocina_page.content.decode()
+        self.assertLess(cocina_body.index('Filete de Res'), cocina_body.index('Pechuga de Pollo'))
+
+        both = self.client.post(
+            reverse('stock:stock_count_session_export_excel', kwargs={'pk': session.pk}),
+            {'areas': [audit_cocina.pk, audit_bodega.pk]},
+        )
+        sheet = load_workbook(BytesIO(both.content)).active
+        self.assertEqual(sheet.cell(3, 4).value, 'Pechuga de Pollo')
+        self.assertEqual(sheet.cell(3, 1).value, 1)
+        self.assertEqual(sheet.cell(4, 4).value, 'Filete de Res')
+        self.assertEqual(sheet.cell(4, 1).value, 2)
+
+        only_cocina = self.client.post(
+            reverse('stock:stock_count_session_export_excel', kwargs={'pk': session.pk}),
+            {'areas': [audit_cocina.pk]},
+        )
+        cocina_sheet = load_workbook(BytesIO(only_cocina.content)).active
+        self.assertEqual(cocina_sheet.cell(3, 4).value, 'Filete de Res')
+        self.assertEqual(cocina_sheet.cell(3, 1).value, 1)
 
     def test_import_products_from_rows_updates_existing_by_name(self):
         rows = [{'name': 'filete de res', 'group': 'Carnes', 'presentation': 'Libra'}]

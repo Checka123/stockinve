@@ -2,7 +2,7 @@ import re
 
 from django.db import transaction
 
-from .models import Category, Product
+from .models import Category, Product, ProductAreaSequence
 
 
 HEADER_MAP = {
@@ -138,14 +138,13 @@ def import_products_from_rows(rows, update_existing=True):
                     product.group = group
                 if presentation:
                     product.presentation = presentation
-                if sequence_number is not None:
-                    product.sequence_number = sequence_number
                 if sku:
                     product.sku = sku
                 if created:
                     product.unit = 'unidad'
-                    if sequence_number is None:
-                        product.sequence_number = 10
+                    product.sequence_number = sequence_number if sequence_number is not None else 10
+                elif sequence_number is not None and not areas:
+                    product.sequence_number = sequence_number
                 product.save()
 
                 for area_name in areas:
@@ -153,6 +152,12 @@ def import_products_from_rows(rows, update_existing=True):
                     if area_created:
                         summary['areas_created'] += 1
                     product.location.add(category)
+                    if sequence_number is not None:
+                        ProductAreaSequence.objects.update_or_create(
+                            product=product,
+                            area=category,
+                            defaults={'sequence_number': sequence_number},
+                        )
 
                 if created:
                     summary['created'] += 1

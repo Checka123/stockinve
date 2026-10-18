@@ -11,7 +11,8 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from .models import (
     Product, Category, Supplier, StockAudit, StockAuditItem, StockCountSession,
-    PurchaseOrder, PurchaseOrderItem, StockMovement, AppSettings
+    PurchaseOrder, PurchaseOrderItem, StockMovement, AppSettings, ProductAreaSequence,
+    order_queryset_by_area, sequences_for_area,
 )
 from .forms import (
     ProductForm, StockAuditForm, StockCountSessionForm, SupplierForm, CategoryForm,
@@ -25,11 +26,12 @@ def _populate_audit_items(audit, category=None):
     Precarga los items de conteo de una toma con los productos activos
     (opcionalmente filtrados por la categoría/área indicada) y retorna el conteo.
     """
-    products_qs = Product.objects.filter(is_active=True).order_by('sequence_number', 'category__name', 'name')
+    products_qs = Product.objects.filter(is_active=True)
     if category:
         products_qs = products_qs.filter(
             Q(location=category) | Q(category=category)
         ).distinct()
+    products_qs = order_queryset_by_area(products_qs, category, product_id_field='pk', name_field='name')
 
     items_to_create = [
         StockAuditItem(
@@ -56,9 +58,14 @@ def _sync_area_items(audit, area):
     if area is None:
         return 0
     existing_product_ids = set(audit.items.values_list('product_id', flat=True))
-    products_qs = Product.objects.filter(is_active=True).filter(
-        Q(location=area) | Q(category=area)
-    ).distinct()
+    products_qs = order_queryset_by_area(
+        Product.objects.filter(is_active=True).filter(
+            Q(location=area) | Q(category=area)
+        ).distinct(),
+        area,
+        product_id_field='pk',
+        name_field='name',
+    )
 
     items_to_create = [
         StockAuditItem(
@@ -254,7 +261,7 @@ def product_list(request):
 
     products = Product.objects.filter(is_active=True).select_related(
         'category', 'supplier'
-    ).prefetch_related('location').order_by('sequence_number', 'name')
+    ).prefetch_related('location')
 
     if query:
         products = products.filter(
@@ -267,6 +274,10 @@ def product_list(request):
         products = products.filter(
             Q(location__id=category_id) | Q(category_id=category_id)
         ).distinct()
+        area = Category.objects.filter(pk=category_id).first()
+        products = order_queryset_by_area(products, area, product_id_field='pk', name_field='name')
+    else:
+        products = products.order_by('sequence_number', 'name')
 
     if supplier_id:
         products = products.filter(supplier_id=supplier_id)
@@ -298,6 +309,43 @@ def product_list(request):
     return render(request, 'stock/product_list.html', context)
 
 
+def _area_order_rows(product=None):
+    sequences = {}
+    selected = set()
+    fallback = 10
+    if product is not None and product.pk:
+        sequences = dict(product.area_sequences.values_list('area_id', 'sequence_number'))
+        selected = set(product.location.values_list('id', flat=True))
+        fallback = product.sequence_number or 10
+    return [
+        {
+            'id': area.id,
+            'name': area.name,
+            'sequence': sequences.get(area.id, fallback),
+            'selected': area.id in selected,
+        }
+        for area in Category.objects.order_by('name')
+    ]
+
+
+def _save_area_orders(product, post):
+    selected_ids = set(product.location.values_list('id', flat=True))
+    ProductAreaSequence.objects.filter(product=product).exclude(area_id__in=selected_ids).delete()
+    for area_id in selected_ids:
+        raw = str(post.get(f'area_order_{area_id}', '')).strip()
+        if not raw:
+            continue
+        try:
+            number = max(1, int(raw))
+        except ValueError:
+            continue
+        ProductAreaSequence.objects.update_or_create(
+            product=product,
+            area_id=area_id,
+            defaults={'sequence_number': number},
+        )
+
+
 @login_required
 def product_create(request):
     """Creación de un nuevo producto."""
@@ -305,6 +353,7 @@ def product_create(request):
         form = ProductForm(request.POST)
         if form.is_valid():
             product = form.save()
+            _save_area_orders(product, request.POST)
             initial_stock = product.current_stock or Decimal('0.00')
             if initial_stock > 0:
                 StockMovement.objects.create(
@@ -320,7 +369,11 @@ def product_create(request):
     else:
         form = ProductForm()
 
-    return render(request, 'stock/product_form.html', {'form': form, 'title': 'Nuevo Producto de Cocina / Barra'})
+    return render(request, 'stock/product_form.html', {
+        'form': form,
+        'title': 'Nuevo Producto de Cocina / Barra',
+        'area_orders': _area_order_rows(),
+    })
 
 
 @login_required
@@ -330,13 +383,19 @@ def product_edit(request, pk):
     if request.method == 'POST':
         form = ProductForm(request.POST, instance=product)
         if form.is_valid():
-            form.save()
+            product = form.save()
+            _save_area_orders(product, request.POST)
             messages.success(request, f'Producto "{product.name}" actualizado correctamente.')
             return redirect('stock:product_list')
     else:
         form = ProductForm(instance=product)
 
-    return render(request, 'stock/product_form.html', {'form': form, 'title': f'Editar Producto: {product.name}', 'product': product})
+    return render(request, 'stock/product_form.html', {
+        'form': form,
+        'title': f'Editar Producto: {product.name}',
+        'product': product,
+        'area_orders': _area_order_rows(product),
+    })
 
 
 @login_required
@@ -465,7 +524,7 @@ def stock_audit_count(request, pk):
         items = items.filter(
             Q(product__location=area) | Q(product__category=area)
         ).distinct()
-    items = items.order_by('product__sequence_number', 'product__name')
+    items = order_queryset_by_area(items, area)
 
     if request.method == 'POST':
         action = request.POST.get('action', 'save_draft')
@@ -578,9 +637,8 @@ def stock_audit_order_report(request, pk):
     
     order_items = audit.items.filter(final_order__gt=0).select_related(
         'product', 'product__category', 'product__supplier'
-    ).prefetch_related('product__location').order_by(
-        'product__sequence_number', 'product__name'
-    )
+    ).prefetch_related('product__location')
+    order_items = order_queryset_by_area(order_items, audit.category)
 
     # Agrupar por Proveedor
     suppliers_dict = {}
@@ -613,7 +671,10 @@ def stock_audit_order_report(request, pk):
 def stock_audit_export_csv(request, pk):
     """Descarga de reporte de solicitud en formato CSV ordenado por ordinal/secuencia."""
     audit = get_object_or_404(StockAudit, pk=pk)
-    order_items = audit.items.filter(final_order__gt=0).select_related('product', 'product__supplier').order_by('product__sequence_number', 'product__name')
+    order_items = order_queryset_by_area(
+        audit.items.filter(final_order__gt=0).select_related('product', 'product__supplier'),
+        audit.category,
+    )
 
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     filename = f"solicitud_compra_{audit.audit_date.strftime('%Y%m%d')}_{audit.id}.csv"
@@ -624,7 +685,7 @@ def stock_audit_export_csv(request, pk):
 
     for item in order_items:
         writer.writerow([
-            item.product.sequence_number,
+            getattr(item, 'area_sequence', item.product.sequence_number),
             item.product.name,
             item.product.supplier.name if item.product.supplier else 'Sin Proveedor',
             f"{item.final_order:.2f}",
@@ -798,9 +859,15 @@ def build_session_count_workbook(session, audits, decimal_separator='.'):
         )
         entry['counts'][item.audit_id] = item.counted_stock
         entry['orders'][item.audit_id] = item.final_order or Decimal('0.00')
+    first_area = audits[0].category if audits else None
+    area_sequences = sequences_for_area(first_area, products.keys())
+
+    def _report_sequence(product):
+        return area_sequences.get(product.id, product.sequence_number)
+
     ordered = sorted(
         products.values(),
-        key=lambda entry: (entry['product'].sequence_number, entry['product'].name.lower()),
+        key=lambda entry: (_report_sequence(entry['product']), entry['product'].name.lower()),
     )
 
     workbook = Workbook()
@@ -855,7 +922,7 @@ def build_session_count_workbook(session, audits, decimal_separator='.'):
     for row_index, entry in enumerate(ordered, start=3):
         product = entry['product']
         values = [
-            product.sequence_number,
+            _report_sequence(product),
             product.group or '',
             product.sku or '',
             product.name,
@@ -973,7 +1040,10 @@ def create_orders_from_audit(request, pk):
     Crea órdenes separadas por proveedor o una orden global según prefiera el usuario.
     """
     audit = get_object_or_404(StockAudit, pk=pk)
-    order_items = audit.items.filter(final_order__gt=0).select_related('product', 'product__supplier').order_by('product__sequence_number', 'product__name')
+    order_items = order_queryset_by_area(
+        audit.items.filter(final_order__gt=0).select_related('product', 'product__supplier'),
+        audit.category,
+    )
 
     if not order_items.exists():
         messages.warning(request, 'No hay productos con cantidades a pedir en esta toma de inventario.')
@@ -1231,9 +1301,22 @@ def consolidated_report_view(request):
         data['subtotal_cost'] = suggested * (prod.cost_price or Decimal('0.00'))
         consolidated_items.append(data)
 
-    # Ordenar por sequence_number
+    first_area = None
+    audits_by_id = {str(audit.pk): audit for audit in selected_audits}
+    for raw_id in audit_ids:
+        audit = audits_by_id.get(str(raw_id))
+        if audit is not None:
+            first_area = audit.category
+            break
+    area_sequences = sequences_for_area(first_area, products_map.keys())
+
+    def _area_seq(product):
+        return area_sequences.get(product.id, product.sequence_number)
+
+    for data in consolidated_items:
+        data['area_sequence'] = _area_seq(data['product'])
     consolidated_items.sort(
-        key=lambda x: (x['product'].sequence_number, x['product'].name)
+        key=lambda x: (x['area_sequence'], x['product'].name.lower())
     )
 
     # Filtrar aquellos que requieren pedido
@@ -1305,7 +1388,22 @@ def consolidated_export_csv(request):
     writer = csv.writer(response)
     writer.writerow(['Secuencia', 'Producto', 'Proveedor', 'Total Contado Consolidado', 'Desglose por Ubicación', 'Stock Mínimo', 'Cantidad a Pedir', 'Unidad', 'Costo Unit. (Q)', 'Subtotal Est. (Q)'])
 
-    for pid, data in sorted(products_map.items(), key=lambda x: (x[1]['product'].sequence_number, x[1]['product'].name)):
+    first_audit = StockAudit.objects.filter(id__in=audit_ids).select_related('category').order_by('id').first()
+    if audit_ids:
+        preferred = StockAudit.objects.filter(id=audit_ids[0]).select_related('category').first()
+        if preferred is not None:
+            first_audit = preferred
+    csv_sequences = sequences_for_area(
+        first_audit.category if first_audit else None,
+        products_map.keys(),
+    )
+    for pid, data in sorted(
+        products_map.items(),
+        key=lambda x: (
+            csv_sequences.get(x[1]['product'].id, x[1]['product'].sequence_number),
+            x[1]['product'].name.lower(),
+        ),
+    ):
         prod = data['product']
         ideal_stock = prod.ideal_stock or Decimal('0.00')
         min_stock = prod.min_stock or Decimal('0.00')
@@ -1313,7 +1411,7 @@ def consolidated_export_csv(request):
         order_qty = max(Decimal('0.00'), target - data['total_counted'])
         if order_qty > 0:
             writer.writerow([
-                prod.sequence_number,
+                csv_sequences.get(prod.id, prod.sequence_number),
                 prod.name,
                 prod.supplier.name if prod.supplier else 'Sin Proveedor',
                 f"{data['total_counted']:.2f}",

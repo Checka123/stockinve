@@ -138,6 +138,25 @@
                 </div>
             </div>
 
+            <div id="areaOrderList" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-slate-800">Orden por área</p>
+                    <p class="text-[11px] text-slate-500 mt-0.5">Este número es el que usa el conteo de cada área. El de arriba sigue siendo el orden general.</p>
+                </div>
+                <div id="areaOrderEmpty" class="text-xs text-slate-500">Selecciona al menos un área para asignarle un orden.</div>
+                {% for area in area_orders %}
+                <div class="area-order-row {% if not area.selected %}hidden{% endif %} flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2" data-area-id="{{ area.id }}">
+                    <span class="text-sm font-medium text-slate-800">{{ area.name }}</span>
+                    <input type="number"
+                           name="area_order_{{ area.id }}"
+                           value="{{ area.sequence }}"
+                           min="1"
+                           class="form-input w-24 text-right"
+                           aria-label="Orden en {{ area.name }}">
+                </div>
+                {% endfor %}
+            </div>
+
             <!-- Configuración Clave de Stock -->
             <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
                 <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-800">
@@ -239,6 +258,12 @@
             count.textContent = names.length
                 ? `${names.length} ${names.length === 1 ? 'sección seleccionada' : 'secciones seleccionadas'}`
                 : 'Ninguna seleccionada';
+            const selectedIds = new Set(selected.map(checkbox => checkbox.value));
+            document.querySelectorAll('.area-order-row').forEach(row => {
+                row.classList.toggle('hidden', !selectedIds.has(row.dataset.areaId));
+            });
+            const empty = document.getElementById('areaOrderEmpty');
+            if (empty) empty.classList.toggle('hidden', selectedIds.size > 0);
         };
 
         const setOpen = isOpen => {

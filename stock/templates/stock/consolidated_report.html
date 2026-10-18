@@ -176,7 +176,7 @@ Total productos: {{ group.items|length }}</textarea>
                             <tr class="hover:bg-slate-50/50">
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-2">
-                                        <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1 py-0.5 rounded font-bold">#{{ item.product.sequence_number }}</span>
+                                        <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1 py-0.5 rounded font-bold">#{{ item.area_sequence }}</span>
                                         <span class="font-bold text-slate-900">{{ item.product.name }}</span>
                                     </div>
                                     {% if item.product.sku %}

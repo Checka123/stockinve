@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Category, Supplier, Product, StockAudit, StockAuditItem, StockCountSession,
-    PurchaseOrder, PurchaseOrderItem, StockMovement, AppSettings,
+    PurchaseOrder, PurchaseOrderItem, StockMovement, AppSettings, ProductAreaSequence,
 )
 
 
@@ -75,6 +75,13 @@ class StockMovementAdmin(admin.ModelAdmin):
     list_display = ('created_at', 'product', 'movement_type', 'quantity', 'previous_stock', 'new_stock', 'reference')
     list_filter = ('movement_type', 'created_at')
     search_fields = ('product__name', 'reference')
+
+
+@admin.register(ProductAreaSequence)
+class ProductAreaSequenceAdmin(admin.ModelAdmin):
+    list_display = ('area', 'sequence_number', 'product')
+    list_filter = ('area',)
+    search_fields = ('product__name', 'area__name')
 
 
 @admin.register(AppSettings)
